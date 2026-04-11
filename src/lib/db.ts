@@ -79,11 +79,17 @@ export async function getUserStudyLogs(uid: string): Promise<StudyLog[]> {
   const q = query(
     collection(db, "studyLogs"),
     where("uid", "==", uid),
-    orderBy("date", "desc"),
-    orderBy("createdAt", "desc")
+    orderBy("date", "desc")
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as StudyLog));
+  const logs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as StudyLog));
+  // Secondary sort by createdAt client-side (avoids composite index requirement)
+  return logs.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    const aTs = a.createdAt?.seconds ?? 0;
+    const bTs = b.createdAt?.seconds ?? 0;
+    return bTs - aTs;
+  });
 }
 
 export async function getFriendStudyLogs(uid: string): Promise<StudyLog[]> {
