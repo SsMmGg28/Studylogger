@@ -40,8 +40,8 @@ export default function LoginPage() {
   async function handleGoogle() {
     setGoogleLoading(true);
     try {
-      await loginWithGoogle();
-      router.push("/");
+      const { isNew } = await loginWithGoogle();
+      router.push(isNew ? "/auth/setup-username" : "/");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
       if (!msg.includes("popup-closed")) {

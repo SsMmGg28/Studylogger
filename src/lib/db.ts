@@ -160,6 +160,48 @@ export async function getFriendships(uid: string): Promise<Friendship[]> {
   return results;
 }
 
+// ─── Exam Logs (Deneme) ───────────────────────────────────────────────────────
+
+export interface ExamLog {
+  id: string;
+  uid: string;
+  examType: "tyt" | "ayt";
+  examCategory: "tam" | "brans";
+  date: string; // YYYY-MM-DD
+  // Tam deneme fields
+  subjectNets?: Record<string, number>; // subject id → net score
+  totalNet?: number;
+  // Branş denemesi fields
+  subject?: string;
+  net?: number;
+  durationMinutes?: number;
+  notes?: string;
+  createdAt: Timestamp;
+}
+
+export async function addExamLog(
+  uid: string,
+  data: Omit<ExamLog, "id" | "uid" | "createdAt">
+): Promise<string> {
+  const ref = await addDoc(collection(db, "examLogs"), {
+    ...data,
+    uid,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function deleteExamLog(id: string): Promise<void> {
+  await deleteDoc(doc(db, "examLogs", id));
+}
+
+export async function getUserExamLogs(uid: string): Promise<ExamLog[]> {
+  const q = query(collection(db, "examLogs"), where("uid", "==", uid));
+  const snap = await getDocs(q);
+  const logs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ExamLog));
+  return logs.sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
 // ─── Stats helpers ────────────────────────────────────────────────────────────
 
 export function aggregateBySubject(logs: StudyLog[]): Record<string, { minutes: number; questions: number }> {

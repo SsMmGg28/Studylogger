@@ -67,43 +67,32 @@ export async function logout(): Promise<void> {
   }
 }
 
-/** Generate a URL-safe username from a display name */
-function toUsername(displayName: string): string {
-  return displayName
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // strip diacritics (ş→s, ı→i …)
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_|_$/g, "")
-    .slice(0, 18);
-}
-
-export async function loginWithGoogle(): Promise<User> {
+export async function loginWithGoogle(): Promise<{ user: User; isNew: boolean }> {
   const provider = new GoogleAuthProvider();
   const cred = await signInWithPopup(auth, provider);
   const user = cred.user;
 
   // Check if profile already exists — returning user, nothing to do
   const userSnap = await getDoc(doc(db, "users", user.uid));
-  if (userSnap.exists()) return user;
+  if (userSnap.exists()) return { user, isNew: false };
 
-  // New Google user — create profile with auto-generated username
-  let baseUsername = toUsername(user.displayName ?? user.email?.split("@")[0] ?? "user");
-  if (!baseUsername) baseUsername = "user";
+  // New Google user — profile will be created after username is chosen
+  return { user, isNew: true };
+}
 
-  // Ensure username uniqueness (append random 4-digit suffix if taken)
-  let username = baseUsername;
-  let attempt = 0;
-  while (true) {
-    const snap = await getDoc(doc(db, "usernames", username));
-    if (!snap.exists()) break;
-    username = `${baseUsername}_${Math.floor(1000 + Math.random() * 9000)}`;
-    if (++attempt > 5) { username = `${baseUsername}_${Date.now()}`; break; }
+export async function completeGoogleProfile(
+  user: User,
+  username: string
+): Promise<void> {
+  // Check username uniqueness
+  const usernameDoc = await getDoc(doc(db, "usernames", username.toLowerCase()));
+  if (usernameDoc.exists()) {
+    throw new Error("Bu kullanıcı adı zaten alınmış.");
   }
 
   const userData = {
     displayName: user.displayName ?? username,
-    username,
+    username: username.toLowerCase(),
     email: user.email ?? "",
     photoURL: user.photoURL ?? null,
     privacySettings: {
@@ -116,8 +105,7 @@ export async function loginWithGoogle(): Promise<User> {
 
   await Promise.all([
     setDoc(doc(db, "users", user.uid), userData),
-    setDoc(doc(db, "usernames", username), { uid: user.uid }),
+    setDoc(doc(db, "usernames", username.toLowerCase()), { uid: user.uid }),
   ]);
-
-  return user;
 }
+

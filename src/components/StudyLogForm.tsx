@@ -24,6 +24,14 @@ interface StudyLogFormProps {
 }
 
 export default function StudyLogForm({ initial, onSubmit, onCancel, loading }: StudyLogFormProps) {
+  // Derive initial exam type from the subject id (ayt_ prefix → "ayt", else "tyt")
+  const getInitialExamType = (): "tyt" | "ayt" | "" => {
+    if (!initial?.subject) return "";
+    const s = SUBJECTS.find((x) => x.id === initial.subject);
+    return s?.type ?? "";
+  };
+
+  const [examType, setExamType] = useState<"tyt" | "ayt" | "">(getInitialExamType());
   const [subject, setSubject] = useState(initial?.subject ?? "");
   const [topic, setTopic] = useState(initial?.topic ?? "");
   const [duration, setDuration] = useState(String(initial?.durationMinutes ?? ""));
@@ -32,7 +40,15 @@ export default function StudyLogForm({ initial, onSubmit, onCancel, loading }: S
   const [date, setDate] = useState(initial?.date ?? format(new Date(), "yyyy-MM-dd"));
   const [customTopic, setCustomTopic] = useState(false);
 
+  const filteredSubjects = examType ? SUBJECTS.filter((s) => s.type === examType) : [];
   const selectedSubject = SUBJECTS.find((s) => s.id === subject);
+
+  function handleExamTypeChange(val: "tyt" | "ayt") {
+    setExamType(val);
+    setSubject("");
+    setTopic("");
+    setCustomTopic(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -62,70 +78,89 @@ export default function StudyLogForm({ initial, onSubmit, onCancel, loading }: S
         />
       </div>
 
-      {/* Subject */}
+      {/* Exam Type */}
       <div className="space-y-2">
-        <Label>Ders</Label>
-        <Select value={subject} onValueChange={(v) => { setSubject(v); setTopic(""); setCustomTopic(false); }} required>
-          <SelectTrigger>
-            <SelectValue placeholder="Ders seçin…" />
-          </SelectTrigger>
-          <SelectContent>
-            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">AYT Sayısal</div>
-            {SUBJECTS.filter((s) => s.type === "sayisal").map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                <span className="flex items-center gap-2">
-                  <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                  {s.label}
-                </span>
-              </SelectItem>
-            ))}
-            <div className="px-2 py-1 mt-1 text-xs font-semibold text-muted-foreground">TYT</div>
-            {SUBJECTS.filter((s) => s.type === "tyt").map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                <span className="flex items-center gap-2">
-                  <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                  {s.label}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label>Sınav Türü</Label>
+        <div className="flex gap-3">
+          {(["tyt", "ayt"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => handleExamTypeChange(t)}
+              className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
+                examType === t
+                  ? "bg-primary/15 border-primary text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/50"
+              }`}
+            >
+              {t.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Topic */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label>Konu</Label>
-          {selectedSubject && (
-            <button
-              type="button"
-              className="text-xs text-primary hover:underline"
-              onClick={() => { setCustomTopic(!customTopic); setTopic(""); }}
-            >
-              {customTopic ? "Listeden seç" : "Elle yaz"}
-            </button>
-          )}
-        </div>
-        {!customTopic && selectedSubject ? (
-          <Select value={topic} onValueChange={setTopic} required>
+      {/* Subject */}
+      {examType && (
+        <div className="space-y-2">
+          <Label>Ders</Label>
+          <Select
+            value={subject}
+            onValueChange={(v) => { setSubject(v); setTopic(""); setCustomTopic(false); }}
+            required
+          >
             <SelectTrigger>
-              <SelectValue placeholder="Konu seçin…" />
+              <SelectValue placeholder="Ders seçin…" />
             </SelectTrigger>
             <SelectContent>
-              {selectedSubject.topics.map((t) => (
-                <SelectItem key={t} value={t}>{t}</SelectItem>
+              {filteredSubjects.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  <span className="flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                    {s.label}
+                  </span>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
-        ) : (
-          <Input
-            placeholder="Konuyu yazın…"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            required
-          />
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Topic */}
+      {subject && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label>Konu</Label>
+            {selectedSubject && (
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline"
+                onClick={() => { setCustomTopic(!customTopic); setTopic(""); }}
+              >
+                {customTopic ? "Listeden seç" : "Elle yaz"}
+              </button>
+            )}
+          </div>
+          {!customTopic && selectedSubject ? (
+            <Select value={topic} onValueChange={setTopic} required>
+              <SelectTrigger>
+                <SelectValue placeholder="Konu seçin…" />
+              </SelectTrigger>
+              <SelectContent>
+                {selectedSubject.topics.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              placeholder="Konuyu yazın…"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              required
+            />
+          )}
+        </div>
+      )}
 
       {/* Duration + Questions */}
       <div className="grid grid-cols-2 gap-4">
@@ -184,3 +219,4 @@ export default function StudyLogForm({ initial, onSubmit, onCancel, loading }: S
     </form>
   );
 }
+

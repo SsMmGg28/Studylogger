@@ -1,18 +1,26 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return;
+    if (!user) {
       router.push("/auth/login");
+      return;
     }
-  }, [user, loading, router]);
+    // Authenticated but no profile yet (new Google user) — redirect to username setup
+    // unless we're already on that page
+    if (!profile && pathname !== "/auth/setup-username") {
+      router.push("/auth/setup-username");
+    }
+  }, [user, profile, loading, router, pathname]);
 
   if (loading) {
     return (
@@ -22,6 +30,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) return null;
+  if (!user || !profile) return null;
   return <>{children}</>;
 }
+
