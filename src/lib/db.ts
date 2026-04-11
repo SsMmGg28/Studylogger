@@ -6,12 +6,10 @@ import {
   doc,
   query,
   where,
-  orderBy,
   getDocs,
   getDoc,
   serverTimestamp,
   Timestamp,
-  limit,
   setDoc,
   writeBatch,
 } from "firebase/firestore";
@@ -76,14 +74,13 @@ export async function deleteStudyLog(id: string): Promise<void> {
 }
 
 export async function getUserStudyLogs(uid: string): Promise<StudyLog[]> {
+  // No orderBy in query — avoids composite index requirement on Firestore
   const q = query(
     collection(db, "studyLogs"),
-    where("uid", "==", uid),
-    orderBy("date", "desc")
+    where("uid", "==", uid)
   );
   const snap = await getDocs(q);
   const logs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as StudyLog));
-  // Secondary sort by createdAt client-side (avoids composite index requirement)
   return logs.sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     const aTs = a.createdAt?.seconds ?? 0;
@@ -95,12 +92,11 @@ export async function getUserStudyLogs(uid: string): Promise<StudyLog[]> {
 export async function getFriendStudyLogs(uid: string): Promise<StudyLog[]> {
   const q = query(
     collection(db, "studyLogs"),
-    where("uid", "==", uid),
-    orderBy("date", "desc"),
-    limit(200)
+    where("uid", "==", uid)
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as StudyLog));
+  const logs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as StudyLog));
+  return logs.sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 200);
 }
 
 // ─── User Profiles ────────────────────────────────────────────────────────────
