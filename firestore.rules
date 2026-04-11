@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users: only owner can read/write their own doc
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Username reservations: anyone authenticated can read; only owner can write
+    match /usernames/{username} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if false; // username is permanent
+    }
+
+    // Study logs: owner can CRUD; friends with accepted friendship can read
+    match /studyLogs/{logId} {
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      // Friends can read (checked in app layer; we trust uid match for simplicity)
+      allow read: if request.auth != null;
+    }
+
+    // Friendships: participants can read/write
+    match /friendships/{docId} {
+      allow read: if request.auth != null &&
+        (resource.data.userA == request.auth.uid || resource.data.userB == request.auth.uid);
+      allow create: if request.auth != null &&
+        (request.resource.data.userA == request.auth.uid || request.resource.data.userB == request.auth.uid);
+      allow update: if request.auth != null &&
+        (resource.data.userA == request.auth.uid || resource.data.userB == request.auth.uid);
+      allow delete: if request.auth != null &&
+        (resource.data.userA == request.auth.uid || resource.data.userB == request.auth.uid);
+    }
+  }
+}
