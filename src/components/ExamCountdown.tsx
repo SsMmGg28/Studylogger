@@ -5,10 +5,9 @@ import { differenceInDays, differenceInHours, differenceInMinutes } from "date-f
 import { Card, CardContent } from "@/components/ui/card";
 import { Timer } from "lucide-react";
 
-// YKS TYT: 14 Haziran 2025 — AYT: 15 Haziran 2025
-// 2026 için resmi tarihler henüz açıklanmadı; yaklaşık olarak Haziran ortası
-const YKS_TYT_DATE = new Date("2026-06-13T09:00:00");
-const YKS_AYT_DATE = new Date("2026-06-14T09:00:00");
+// YKS TYT: 20 Haziran 2026 — AYT: 21 Haziran 2026
+const YKS_TYT_DATE = new Date("2026-06-20T09:00:00");
+const YKS_AYT_DATE = new Date("2026-06-21T09:00:00");
 
 interface TimeLeft {
   days: number;
