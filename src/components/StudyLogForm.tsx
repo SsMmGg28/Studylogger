@@ -14,7 +14,9 @@ import {
 } from "@/components/ui/select";
 import { SUBJECTS } from "@/lib/subjects";
 import type { StudyLog } from "@/lib/db";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
+import { X } from "lucide-react";
 
 interface StudyLogFormProps {
   initial?: Partial<StudyLog>;
@@ -38,6 +40,8 @@ export default function StudyLogForm({ initial, onSubmit, onCancel, loading }: S
   const [questions, setQuestions] = useState(String(initial?.questionCount ?? ""));
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [date, setDate] = useState(initial?.date ?? format(new Date(), "yyyy-MM-dd"));
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
+  const [tagInput, setTagInput] = useState("");
   const [customTopic, setCustomTopic] = useState(false);
 
   const filteredSubjects = examType ? SUBJECTS.filter((s) => s.type === examType) : [];
@@ -58,6 +62,7 @@ export default function StudyLogForm({ initial, onSubmit, onCancel, loading }: S
       durationMinutes: Number(duration) || 0,
       questionCount: Number(questions) || 0,
       notes: notes.trim() || undefined,
+      tags: tags.length > 0 ? tags : undefined,
       date,
     });
   }
@@ -202,6 +207,42 @@ export default function StudyLogForm({ initial, onSubmit, onCancel, loading }: S
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
+        />
+      </div>
+
+      {/* Tags */}
+      <div className="space-y-2">
+        <Label>
+          Etiketler <span className="text-muted-foreground text-xs">(opsiyonel)</span>
+        </Label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {tags.map((tag) => (
+            <Badge key={tag} variant="secondary" className="text-xs gap-1 pr-1">
+              #{tag}
+              <button
+                type="button"
+                onClick={() => setTags(tags.filter((t) => t !== tag))}
+                className="ml-0.5 hover:text-destructive"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+        <Input
+          placeholder="Etiket yazıp Enter'a bas… (ör: zor, tekrar-bak)"
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              const val = tagInput.trim().toLowerCase().replace(/[^a-z0-9çşğüöı\-]/g, "");
+              if (val && !tags.includes(val) && tags.length < 10) {
+                setTags([...tags, val]);
+              }
+              setTagInput("");
+            }
+          }}
         />
       </div>
 

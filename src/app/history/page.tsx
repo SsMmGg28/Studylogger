@@ -26,7 +26,8 @@ import {
 import { SUBJECTS } from "@/lib/subjects";
 import type { StudyLog } from "@/lib/db";
 import { toast } from "sonner";
-import { Filter, X } from "lucide-react";
+import { Filter, X, Download, FileText } from "lucide-react";
+import { logsToCSV, logsToPDF } from "@/lib/export";
 
 export default function HistoryPage() {
   const { user } = useAuth();
@@ -34,17 +35,25 @@ export default function HistoryPage() {
   const [editing, setEditing] = useState<StudyLog | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [filterSubject, setFilterSubject] = useState("all");
+  const [filterTag, setFilterTag] = useState("all");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
+
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    logs.forEach((l) => l.tags?.forEach((t) => set.add(t)));
+    return Array.from(set).sort();
+  }, [logs]);
 
   const filtered = useMemo(() => {
     return logs.filter((log) => {
       if (filterSubject !== "all" && log.subject !== filterSubject) return false;
+      if (filterTag !== "all" && (!log.tags || !log.tags.includes(filterTag))) return false;
       if (filterFrom && log.date < filterFrom) return false;
       if (filterTo && log.date > filterTo) return false;
       return true;
     });
-  }, [logs, filterSubject, filterFrom, filterTo]);
+  }, [logs, filterSubject, filterTag, filterFrom, filterTo]);
 
   const totalMins = filtered.reduce((s, l) => s + l.durationMinutes, 0);
   const totalQs = filtered.reduce((s, l) => s + l.questionCount, 0);
@@ -71,7 +80,7 @@ export default function HistoryPage() {
     }
   }
 
-  const hasFilters = filterSubject !== "all" || filterFrom || filterTo;
+  const hasFilters = filterSubject !== "all" || filterTag !== "all" || filterFrom || filterTo;
 
   return (
     <AuthGuard>
@@ -85,7 +94,7 @@ export default function HistoryPage() {
                 variant="ghost"
                 size="sm"
                 className="text-muted-foreground"
-                onClick={() => { setFilterSubject("all"); setFilterFrom(""); setFilterTo(""); }}
+                onClick={() => { setFilterSubject("all"); setFilterTag("all"); setFilterFrom(""); setFilterTo(""); }}
               >
                 <X className="w-4 h-4 mr-1" /> Filtreyi Temizle
               </Button>
@@ -95,7 +104,7 @@ export default function HistoryPage() {
           {/* Filters */}
           <Card>
             <CardContent className="p-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <Select value={filterSubject} onValueChange={setFilterSubject}>
                   <SelectTrigger>
                     <SelectValue placeholder="Tüm Dersler" />
@@ -104,6 +113,17 @@ export default function HistoryPage() {
                     <SelectItem value="all">Tüm Dersler</SelectItem>
                     {SUBJECTS.map((s) => (
                       <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={filterTag} onValueChange={setFilterTag}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tüm Etiketler" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tüm Etiketler</SelectItem>
+                    {allTags.map((t) => (
+                      <SelectItem key={t} value={t}>#{t}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -119,12 +139,24 @@ export default function HistoryPage() {
             </CardContent>
           </Card>
 
-          {/* Summary */}
+          {/* Summary + Export */}
           {filtered.length > 0 && (
-            <div className="flex gap-5 text-sm text-muted-foreground px-1">
-              <span><strong className="text-foreground font-semibold">{filtered.length}</strong> kayıt</span>
-              <span><strong className="text-foreground font-semibold">{totalHours > 0 ? `${totalHours}s ` : ""}{remMins}dk</strong> toplam süre</span>
-              {totalQs > 0 && <span><strong className="text-foreground font-semibold">{totalQs}</strong> soru</span>}
+            <div className="flex items-center justify-between flex-wrap gap-3 px-1">
+              <div className="flex gap-5 text-sm text-muted-foreground">
+                <span><strong className="text-foreground font-semibold">{filtered.length}</strong> kayıt</span>
+                <span><strong className="text-foreground font-semibold">{totalHours > 0 ? `${totalHours}s ` : ""}{remMins}dk</strong> toplam süre</span>
+                {totalQs > 0 && <span><strong className="text-foreground font-semibold">{totalQs}</strong> soru</span>}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => logsToCSV(filtered)}>
+                  <Download className="w-3.5 h-3.5" />
+                  CSV
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => logsToPDF(filtered)}>
+                  <FileText className="w-3.5 h-3.5" />
+                  PDF
+                </Button>
+              </div>
             </div>
           )}
 

@@ -90,8 +90,7 @@ export default function Leaderboard({
                 {/* Avatar */}
                 <Avatar className="h-8 w-8 shrink-0">
                   <AvatarFallback
-                    className="text-xs font-bold"
-                    style={{ backgroundColor: entry.isMe ? "hsl(var(--primary) / 0.2)" : "hsl(var(--muted))" }}
+                    className={`text-xs font-bold ${entry.isMe ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}
                   >
                     {initials}
                   </AvatarFallback>

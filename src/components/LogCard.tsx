@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
-import { Clock, Hash, FileText, Edit2, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Clock, Hash, FileText, Edit2, Trash2, ChevronDown, ChevronUp, Tag } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,16 @@ export default function LogCard({ log, onEdit, onDelete }: LogCardProps) {
                 <span className="flex items-center gap-1">
                   <Hash className="w-3.5 h-3.5" />
                   {log.questionCount} soru
+                </span>
+              )}
+              {log.tags && log.tags.length > 0 && (
+                <span className="flex items-center gap-1 flex-wrap">
+                  <Tag className="w-3.5 h-3.5" />
+                  {log.tags.map((tag) => (
+                    <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0">
+                      #{tag}
+                    </Badge>
+                  ))}
                 </span>
               )}
               {log.notes && (

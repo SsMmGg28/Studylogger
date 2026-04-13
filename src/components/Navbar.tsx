@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BookOpen, LayoutDashboard, PlusCircle, History, Users, Settings, LogOut } from "lucide-react";
+import { BookOpen, LayoutDashboard, PlusCircle, History, Users, Settings, LogOut, Target, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { logout } from "@/lib/auth";
@@ -20,6 +20,8 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/log", label: "Kayıt Ekle", icon: PlusCircle },
   { href: "/history", label: "Geçmiş", icon: History },
+  { href: "/goals", label: "Hedefler", icon: Target },
+  { href: "/stats", label: "İstatistik", icon: BarChart3 },
   { href: "/friends", label: "Arkadaşlar", icon: Users },
 ];
 

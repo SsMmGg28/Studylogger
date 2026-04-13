@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { User, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Lock, Eye, EyeOff, Bell } from "lucide-react";
+import { requestNotificationPermission } from "@/lib/notifications";
 
 function PrivacyToggle({
   label,
@@ -139,6 +140,48 @@ export default function SettingsPage() {
                 checked={privacy.showSubjectBreakdown}
                 onCheckedChange={(v) => setPrivacy((p) => ({ ...p, showSubjectBreakdown: v }))}
               />
+            </CardContent>
+          </Card>
+
+          {/* Notifications */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Bell className="w-4 h-4" /> Bildirimler
+              </CardTitle>
+              <CardDescription>
+                Çalışma hatırlatmaları ve seri uyarıları için bildirimleri etkinleştirin.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">Bildirimlere İzin Ver</p>
+                  <p className="text-xs text-muted-foreground">
+                    {typeof window !== "undefined" && "Notification" in window
+                      ? Notification.permission === "granted"
+                        ? "✅ Bildirimler etkin"
+                        : Notification.permission === "denied"
+                        ? "❌ Bildirimler tarayıcıdan engellendi"
+                        : "Henüz izin verilmedi"
+                      : "Tarayıcınız bildirimleri desteklemiyor"}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const granted = await requestNotificationPermission();
+                    if (granted) {
+                      toast.success("Bildirimler etkinleştirildi!");
+                    } else {
+                      toast.error("Bildirim izni reddedildi.");
+                    }
+                  }}
+                >
+                  İzin Ver
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import Link from "next/link";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -13,12 +13,16 @@ import WeeklyCalendar from "@/components/WeeklyCalendar";
 import WeeklyBarChart from "@/components/WeeklyBarChart";
 import ExamCountdown from "@/components/ExamCountdown";
 import StreakBadge from "@/components/StreakBadge";
+import GoalCard from "@/components/GoalCard";
+import RevisionSuggestions from "@/components/RevisionSuggestions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useStudyLogs } from "@/hooks/useStudyLogs";
+import { useGoals } from "@/hooks/useGoals";
 import { aggregateBySubject } from "@/lib/db";
+import { checkStudyReminder, checkStreakWarning, sendLocalNotification } from "@/lib/notifications";
 
 function StatCard({
   icon: Icon,
@@ -50,6 +54,7 @@ function StatCard({
 export default function DashboardPage() {
   const { user, profile } = useAuth();
   const { logs, loading } = useStudyLogs(user?.uid ?? null);
+  const { goals } = useGoals(user?.uid ?? null);
 
   const now = new Date();
   const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd");
@@ -81,7 +86,25 @@ export default function DashboardPage() {
     return h > 0 ? `${h}s ${min}dk` : `${min}dk`;
   }
 
+  function getGoalCurrent(goal: { subject: string; metric: "minutes" | "questions"; period: "weekly" | "monthly" }) {
+    const agg = goal.period === "weekly" ? weekBySubject : aggregateBySubject(monthLogs);
+    const data = agg[goal.subject];
+    if (!data) return 0;
+    return goal.metric === "minutes" ? data.minutes : data.questions;
+  }
+
   const recentLogs = logs.slice(0, 5);
+
+  // Push notification checks
+  useEffect(() => {
+    if (loading || logs.length === 0) return;
+    const lastDate = logs[0]?.date ?? null;
+    if (checkStreakWarning(lastDate)) {
+      sendLocalNotification("Serini kaybetme! 🔥", "Bugün henüz çalışmadın. Serini devam ettirmek için bir kayıt ekle.");
+    } else if (checkStudyReminder(lastDate)) {
+      sendLocalNotification("Hayırla başla! 📚", "Son çalışmandan bu yana uzun zaman geçti. Bugün bir şeyler çalışmaya ne dersin?");
+    }
+  }, [loading, logs]);
 
   const greeting = () => {
     const h = now.getHours();
@@ -217,6 +240,34 @@ export default function DashboardPage() {
                   <Card>
                     <CardHeader className="pb-2 flex flex-row items-center justify-between">
                       <CardTitle className="text-[13px] font-semibold text-muted-foreground tracking-wide uppercase">
+                        Hedeflerim
+                      </CardTitle>
+                      <Link
+                        href="/goals"
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Tümünü Gör →
+                      </Link>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {goals.length === 0 ? (
+                        <div className="text-center py-4 text-muted-foreground text-sm">
+                          Henüz hedef yok.{" "}
+                          <Link href="/goals" className="text-primary hover:underline">
+                            Hedef belirle!
+                          </Link>
+                        </div>
+                      ) : (
+                        goals.slice(0, 3).map((goal) => (
+                          <GoalCard key={goal.id} goal={goal} current={getGoalCurrent(goal)} />
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                      <CardTitle className="text-[13px] font-semibold text-muted-foreground tracking-wide uppercase">
                         Son Kayıtlar
                       </CardTitle>
                       <Link
@@ -244,6 +295,8 @@ export default function DashboardPage() {
                       )}
                     </CardContent>
                   </Card>
+
+                  <RevisionSuggestions logs={logs} />
                 </div>
               </div>
             </>

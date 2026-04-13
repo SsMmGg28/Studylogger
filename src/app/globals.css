@@ -230,3 +230,13 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: oklch(1 0 0 / 0.12); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: oklch(1 0 0 / 0.2); }
+
+/* ─── Recharts dark mode fixes ───────────────────────────── */
+
+.recharts-wrapper { background: transparent !important; }
+.recharts-surface { background: transparent !important; }
+.recharts-default-tooltip {
+  background-color: #16182a !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  color: #e2e8f0 !important;
+}

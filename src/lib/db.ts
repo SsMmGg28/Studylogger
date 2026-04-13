@@ -15,6 +15,11 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
+/** Remove keys with undefined values (Firestore rejects undefined) */
+function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface StudyLog {
@@ -25,8 +30,17 @@ export interface StudyLog {
   durationMinutes: number;
   questionCount: number;
   notes?: string;
+  tags?: string[];
   date: string; // ISO date string "YYYY-MM-DD"
   createdAt: Timestamp;
+}
+
+export interface StudyGoal {
+  id: string;
+  subject: string;
+  metric: "minutes" | "questions";
+  period: "weekly" | "monthly";
+  target: number;
 }
 
 export interface UserProfile {
@@ -54,11 +68,11 @@ export async function addStudyLog(
   uid: string,
   data: Omit<StudyLog, "id" | "uid" | "createdAt">
 ): Promise<string> {
-  const ref = await addDoc(collection(db, "studyLogs"), {
+  const ref = await addDoc(collection(db, "studyLogs"), stripUndefined({
     ...data,
     uid,
     createdAt: serverTimestamp(),
-  });
+  }));
   return ref.id;
 }
 
@@ -66,7 +80,7 @@ export async function updateStudyLog(
   id: string,
   data: Partial<Omit<StudyLog, "id" | "uid" | "createdAt">>
 ): Promise<void> {
-  await updateDoc(doc(db, "studyLogs", id), data);
+  await updateDoc(doc(db, "studyLogs", id), stripUndefined(data as Record<string, unknown>));
 }
 
 export async function deleteStudyLog(id: string): Promise<void> {
@@ -183,11 +197,11 @@ export async function addExamLog(
   uid: string,
   data: Omit<ExamLog, "id" | "uid" | "createdAt">
 ): Promise<string> {
-  const ref = await addDoc(collection(db, "examLogs"), {
+  const ref = await addDoc(collection(db, "examLogs"), stripUndefined({
     ...data,
     uid,
     createdAt: serverTimestamp(),
-  });
+  }));
   return ref.id;
 }
 
@@ -212,4 +226,46 @@ export function aggregateBySubject(logs: StudyLog[]): Record<string, { minutes: 
     map[log.subject].questions += log.questionCount;
   }
   return map;
+}
+
+export function aggregateByTopic(logs: StudyLog[]): Record<string, { minutes: number; questions: number }> {
+  const map: Record<string, { minutes: number; questions: number }> = {};
+  for (const log of logs) {
+    const key = `${log.subject}:${log.topic}`;
+    if (!map[key]) map[key] = { minutes: 0, questions: 0 };
+    map[key].minutes += log.durationMinutes;
+    map[key].questions += log.questionCount;
+  }
+  return map;
+}
+
+export function getLastStudiedByTopic(logs: StudyLog[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const log of logs) {
+    const key = `${log.subject}:${log.topic}`;
+    if (!map[key] || log.date > map[key]) {
+      map[key] = log.date;
+    }
+  }
+  return map;
+}
+
+// ─── Goals ────────────────────────────────────────────────────────────────────
+
+export async function getGoals(uid: string): Promise<StudyGoal[]> {
+  const q = query(collection(db, "users", uid, "goals"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as StudyGoal));
+}
+
+export async function setGoal(
+  uid: string,
+  data: Omit<StudyGoal, "id">
+): Promise<string> {
+  const ref = await addDoc(collection(db, "users", uid, "goals"), data);
+  return ref.id;
+}
+
+export async function deleteGoal(uid: string, goalId: string): Promise<void> {
+  await deleteDoc(doc(db, "users", uid, "goals", goalId));
 }

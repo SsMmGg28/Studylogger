@@ -34,8 +34,12 @@ export function useAuth(): AuthState {
     }
     const unsub = onAuthStateChanged(a, async (user) => {
       if (user) {
-        const profile = await getUserProfile(user.uid);
-        setState({ user, profile, loading: false });
+        try {
+          const profile = await getUserProfile(user.uid);
+          setState({ user, profile, loading: false });
+        } catch {
+          setState({ user, profile: null, loading: false });
+        }
       } else {
         setState({ user: null, profile: null, loading: false });
       }

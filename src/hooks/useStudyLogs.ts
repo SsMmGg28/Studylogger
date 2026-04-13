@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { getUserStudyLogs, addStudyLog, updateStudyLog, deleteStudyLog, type StudyLog } from "@/lib/db";
 import type { Timestamp } from "firebase/firestore";
 import { DEMO_UID, DEMO_LOGS } from "@/lib/demo-data";
+import { queueOfflineLog, syncOfflineLogs } from "@/lib/offlineQueue";
 
 interface UseStudyLogsResult {
   logs: StudyLog[];
@@ -23,9 +24,22 @@ export function useStudyLogs(uid: string | null): UseStudyLogsResult {
   const refresh = useCallback(async () => {
     if (!uid || isDemo) return;
     setLoading(true);
-    const data = await getUserStudyLogs(uid);
-    setLogs(data);
-    setLoading(false);
+    try {
+      try {
+        const synced = await syncOfflineLogs();
+        if (synced > 0) console.log(`[StudyLogs] Synced ${synced} offline logs to Firestore`);
+      } catch (syncErr) {
+        console.error("[StudyLogs] Offline sync failed:", syncErr);
+      }
+      const data = await getUserStudyLogs(uid);
+      console.log(`[StudyLogs] Fetched ${data.length} logs for uid=${uid}`);
+      setLogs(data);
+    } catch (err) {
+      console.error("[StudyLogs] Failed to fetch logs:", err);
+      setLogs([]);
+    } finally {
+      setLoading(false);
+    }
   }, [uid, isDemo]);
 
   useEffect(() => {
@@ -53,7 +67,13 @@ export function useStudyLogs(uid: string | null): UseStudyLogsResult {
       setLogs((prev) => [newLog, ...prev]);
       return;
     }
-    await addStudyLog(uid, data);
+    try {
+      await addStudyLog(uid, data);
+      console.log("[StudyLogs] Log added to Firestore successfully");
+    } catch (err) {
+      console.error("[StudyLogs] Firestore write failed, queuing offline:", err);
+      await queueOfflineLog({ uid, data });
+    }
     await refresh();
   };
 
