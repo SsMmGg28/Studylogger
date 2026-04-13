@@ -20,9 +20,12 @@ export const metadata: Metadata = {
   description: "YKS öğrencileri için çalışma takip ve arkadaş karşılaştırma platformu",
   manifest: "/manifest.json",
   icons: {
-    icon: "/site-icon.png",
-    shortcut: "/site-icon.png",
-    apple: "/site-icon.png",
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: "/icon-192.png",
+    apple: "/icon-192.png",
   },
   appleWebApp: {
     capable: true,
