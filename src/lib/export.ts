@@ -20,6 +20,20 @@ export async function logsToPDF(logs: StudyLog[]): Promise<void> {
   const autoTable = (await import("jspdf-autotable")).default;
 
   const doc = new jsPDF({ orientation: "landscape" });
+
+  // Load Geist font for Turkish character support
+  try {
+    const fontResponse = await fetch("/fonts/Geist-Regular.ttf");
+    if (!fontResponse.ok) throw new Error(`Font fetch failed: ${fontResponse.status}`);
+    const fontBuffer = await fontResponse.arrayBuffer();
+    const fontBase64 = arrayBufferToBase64(fontBuffer);
+    doc.addFileToVFS("Geist-Regular.ttf", fontBase64);
+    doc.addFont("Geist-Regular.ttf", "Geist", "normal");
+    doc.setFont("Geist");
+  } catch (err) {
+    console.warn("Geist font could not be loaded; Turkish characters may not render correctly in PDF.", err);
+  }
+
   doc.setFontSize(16);
   doc.text("StudyLogger — Çalışma Raporu", 14, 18);
   doc.setFontSize(9);
@@ -39,11 +53,21 @@ export async function logsToPDF(logs: StudyLog[]): Promise<void> {
     startY: 30,
     head: [["Tarih", "Ders", "Konu", "Süre (dk)", "Soru", "Etiketler", "Notlar"]],
     body: tableData,
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font: "Geist" },
     headStyles: { fillColor: [99, 102, 241] },
   });
 
   doc.save(`studylogger-export-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunks: string[] = [];
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+  }
+  return btoa(chunks.join(""));
 }
 
 function downloadBlob(blob: Blob, filename: string) {
