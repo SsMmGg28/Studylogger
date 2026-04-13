@@ -24,13 +24,14 @@ export async function logsToPDF(logs: StudyLog[]): Promise<void> {
   // Load Geist font for Turkish character support
   try {
     const fontResponse = await fetch("/fonts/Geist-Regular.ttf");
+    if (!fontResponse.ok) throw new Error(`Font fetch failed: ${fontResponse.status}`);
     const fontBuffer = await fontResponse.arrayBuffer();
     const fontBase64 = arrayBufferToBase64(fontBuffer);
     doc.addFileToVFS("Geist-Regular.ttf", fontBase64);
     doc.addFont("Geist-Regular.ttf", "Geist", "normal");
     doc.setFont("Geist");
-  } catch {
-    // Fall back to default font if Geist is unavailable
+  } catch (err) {
+    console.warn("Geist font could not be loaded; Turkish characters may not render correctly in PDF.", err);
   }
 
   doc.setFontSize(16);
@@ -61,11 +62,12 @@ export async function logsToPDF(logs: StudyLog[]): Promise<void> {
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const chunks: string[] = [];
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
   }
-  return btoa(binary);
+  return btoa(chunks.join(""));
 }
 
 function downloadBlob(blob: Blob, filename: string) {
