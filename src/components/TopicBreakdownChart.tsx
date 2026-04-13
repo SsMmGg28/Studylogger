@@ -89,13 +89,14 @@ export default function TopicBreakdownChart({ logs }: TopicBreakdownChartProps) 
             <XAxis type="number" tick={{ fontSize: 11, fill: C_TICK }} axisLine={false} tickLine={false} />
             <YAxis type="category" dataKey="topic" width={140} tick={{ fontSize: 11, fill: C_TICK }} axisLine={false} tickLine={false} />
             <Tooltip
+              cursor={false}
               formatter={(value) => [
                 metric === "minutes" ? `${value} dk` : `${value} soru`,
                 metric === "minutes" ? "Süre" : "Soru",
               ]}
               contentStyle={{ backgroundColor: C_TOOLTIP_BG, border: `1px solid ${C_TOOLTIP_BORDER}`, borderRadius: "8px", color: "#e2e8f0" }}
             />
-            <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={24} background={false}>
+            <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={24}>
               {data.map((_, i) => (
                 <Cell key={i} fill={color} fillOpacity={0.8} />
               ))}

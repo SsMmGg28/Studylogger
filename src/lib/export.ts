@@ -20,6 +20,19 @@ export async function logsToPDF(logs: StudyLog[]): Promise<void> {
   const autoTable = (await import("jspdf-autotable")).default;
 
   const doc = new jsPDF({ orientation: "landscape" });
+
+  // Load Geist font for Turkish character support
+  try {
+    const fontResponse = await fetch("/fonts/Geist-Regular.ttf");
+    const fontBuffer = await fontResponse.arrayBuffer();
+    const fontBase64 = arrayBufferToBase64(fontBuffer);
+    doc.addFileToVFS("Geist-Regular.ttf", fontBase64);
+    doc.addFont("Geist-Regular.ttf", "Geist", "normal");
+    doc.setFont("Geist");
+  } catch {
+    // Fall back to default font if Geist is unavailable
+  }
+
   doc.setFontSize(16);
   doc.text("StudyLogger — Çalışma Raporu", 14, 18);
   doc.setFontSize(9);
@@ -39,11 +52,20 @@ export async function logsToPDF(logs: StudyLog[]): Promise<void> {
     startY: 30,
     head: [["Tarih", "Ders", "Konu", "Süre (dk)", "Soru", "Etiketler", "Notlar"]],
     body: tableData,
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font: "Geist" },
     headStyles: { fillColor: [99, 102, 241] },
   });
 
   doc.save(`studylogger-export-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 function downloadBlob(blob: Blob, filename: string) {
