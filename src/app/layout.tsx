@@ -19,6 +19,11 @@ export const metadata: Metadata = {
   title: "StudyLogger — YKS Çalışma Takip",
   description: "YKS öğrencileri için çalışma takip ve arkadaş karşılaştırma platformu",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/site-icon.png",
+    shortcut: "/site-icon.png",
+    apple: "/site-icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
