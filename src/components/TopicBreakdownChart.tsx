@@ -1,12 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-
-// Hardcoded hex colors — CSS variables (oklch) don't resolve in SVG attributes
-const C_TICK = "#64748b";
-const C_TOOLTIP_BG = "#16182a";
-const C_TOOLTIP_BORDER = "rgba(255,255,255,0.08)";
 import {
   Select,
   SelectContent,
@@ -40,11 +34,15 @@ export default function TopicBreakdownChart({ logs }: TopicBreakdownChartProps) 
       map[log.topic].questions += log.questionCount;
     }
     return Object.entries(map)
-      .map(([topic, vals]) => ({ topic, value: metric === "minutes" ? vals.minutes : vals.questions }))
+      .map(([topic, vals]) => ({
+        topic,
+        value: metric === "minutes" ? vals.minutes : vals.questions,
+      }))
       .sort((a, b) => b.value - a.value);
   }, [logs, selectedSubject, metric]);
 
   const color = SUBJECT_COLORS[selectedSubject] ?? "#6366f1";
+  const maxValue = data.length > 0 ? Math.max(...data.map((d) => d.value)) : 0;
 
   return (
     <div className="space-y-4">
@@ -84,24 +82,40 @@ export default function TopicBreakdownChart({ logs }: TopicBreakdownChartProps) 
           Bu derste kayıt bulunamadı.
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={Math.max(200, data.length * 36)}>
-          <BarChart data={data} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
-            <XAxis type="number" tick={{ fontSize: 11, fill: C_TICK }} axisLine={false} tickLine={false} />
-            <YAxis type="category" dataKey="topic" width={140} tick={{ fontSize: 11, fill: C_TICK }} axisLine={false} tickLine={false} />
-            <Tooltip
-              formatter={(value) => [
-                metric === "minutes" ? `${value} dk` : `${value} soru`,
-                metric === "minutes" ? "Süre" : "Soru",
-              ]}
-              contentStyle={{ backgroundColor: C_TOOLTIP_BG, border: `1px solid ${C_TOOLTIP_BORDER}`, borderRadius: "8px", color: "#e2e8f0" }}
-            />
-            <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={24} background={false}>
-              {data.map((_, i) => (
-                <Cell key={i} fill={color} fillOpacity={0.8} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="space-y-3">
+          {data.map((item, i) => {
+            const pct = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+            return (
+              <div key={item.topic} className="group" style={{ animationDelay: `${i * 60}ms` }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm text-foreground/90 font-medium truncate max-w-[60%]">
+                    {item.topic}
+                  </span>
+                  <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+                    {metric === "minutes" ? `${item.value} dk` : `${item.value} soru`}
+                  </span>
+                </div>
+                <div className="relative h-7 rounded-lg bg-white/5 overflow-hidden">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-lg transition-all duration-700 ease-out group-hover:brightness-125"
+                    style={{
+                      width: `${Math.max(pct, 2)}%`,
+                      background: `linear-gradient(90deg, ${color}cc, ${color}ff)`,
+                      boxShadow: `0 0 12px ${color}40`,
+                    }}
+                  />
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-lg opacity-30"
+                    style={{
+                      width: `${Math.max(pct, 2)}%`,
+                      background: `linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 100%)`,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

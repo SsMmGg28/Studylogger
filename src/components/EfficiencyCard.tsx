@@ -1,17 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { format, startOfWeek, subWeeks } from "date-fns";
 import { tr } from "date-fns/locale";
 import { TrendingUp } from "lucide-react";
 import type { StudyLog } from "@/lib/db";
-
-// Hardcoded hex colors — CSS variables (oklch) don't resolve in SVG attributes
-const C_LINE   = "#818cf8"; // indigo-400
-const C_TICK   = "#64748b"; // slate-500
-const C_TOOLTIP_BG = "#16182a";
-const C_TOOLTIP_BORDER = "rgba(255,255,255,0.08)";
 
 interface EfficiencyCardProps {
   logs: StudyLog[];
@@ -50,6 +43,10 @@ export default function EfficiencyCard({ logs }: EfficiencyCardProps) {
     ? ((latestWithData.efficiency! - prevWithData.efficiency!) / prevWithData.efficiency! * 100).toFixed(0)
     : null;
 
+  // Find max efficiency for scaling
+  const maxEff = Math.max(...weeklyData.map((w) => w.efficiency ?? 0), 0.01);
+  const chartHeight = 160;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -70,25 +67,79 @@ export default function EfficiencyCard({ logs }: EfficiencyCardProps) {
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={180}>
-        <LineChart data={weeklyData} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-          <XAxis dataKey="week" tick={{ fontSize: 10, fill: C_TICK }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: C_TICK }} width={35} axisLine={false} tickLine={false} />
-          <Tooltip
-            formatter={(value) => [`${value} soru/dk`, "Verimlilik"]}
-            contentStyle={{ backgroundColor: C_TOOLTIP_BG, border: `1px solid ${C_TOOLTIP_BORDER}`, borderRadius: "8px", color: "#e2e8f0" }}
-          />
-          <Line
-            type="monotone"
-            dataKey="efficiency"
-            stroke={C_LINE}
-            strokeWidth={2}
-            dot={{ r: 3, fill: C_LINE, strokeWidth: 0 }}
-            activeDot={{ r: 5, fill: C_LINE, strokeWidth: 0 }}
-            connectNulls={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      {/* Pure CSS Line Chart */}
+      <div className="relative" style={{ height: chartHeight + 32 }}>
+        {/* Y-axis grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map((pct) => (
+          <div
+            key={pct}
+            className="absolute left-8 right-0 border-t border-white/5"
+            style={{ top: chartHeight * (1 - pct) }}
+          >
+            <span className="absolute -left-8 -top-2.5 text-[10px] text-muted-foreground tabular-nums w-7 text-right">
+              {(maxEff * pct).toFixed(1)}
+            </span>
+          </div>
+        ))}
+
+        {/* Data points and connecting lines */}
+        <svg
+          className="absolute left-8 top-0"
+          style={{ width: "calc(100% - 2rem)", height: chartHeight }}
+          viewBox={`0 0 ${(weeklyData.length - 1) * 100} ${chartHeight}`}
+          preserveAspectRatio="none"
+          fill="none"
+        >
+          {/* Gradient area fill */}
+          <defs>
+            <linearGradient id="effGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#818cf8" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#818cf8" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {/* Area */}
+          {(() => {
+            const points = weeklyData.map((w, i) => ({
+              x: i * 100,
+              y: w.efficiency !== null ? chartHeight - (w.efficiency / maxEff) * chartHeight : null,
+            }));
+            const validPoints = points.filter((p) => p.y !== null) as { x: number; y: number }[];
+            if (validPoints.length < 2) return null;
+            const pathD = validPoints.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+            const areaD = `${pathD} L ${validPoints[validPoints.length - 1].x} ${chartHeight} L ${validPoints[0].x} ${chartHeight} Z`;
+            return (
+              <>
+                <path d={areaD} fill="url(#effGradient)" />
+                <path d={pathD} stroke="#818cf8" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+              </>
+            );
+          })()}
+          {/* Dots */}
+          {weeklyData.map((w, i) =>
+            w.efficiency !== null ? (
+              <circle
+                key={i}
+                cx={i * 100}
+                cy={chartHeight - (w.efficiency / maxEff) * chartHeight}
+                r="4"
+                fill="#818cf8"
+                stroke="#16182a"
+                strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null
+          )}
+        </svg>
+
+        {/* X-axis labels */}
+        <div className="absolute left-8 right-0 flex justify-between" style={{ top: chartHeight + 6 }}>
+          {weeklyData.map((w, i) => (
+            <span key={i} className="text-[10px] text-muted-foreground text-center" style={{ width: 0, overflow: "visible" }}>
+              {i % 2 === 0 ? w.week : ""}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

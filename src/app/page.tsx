@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useEffect } from "react";
 import Link from "next/link";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { tr } from "date-fns/locale";
-import { PlusCircle, Clock, Hash, TrendingUp, BookOpen } from "lucide-react";
+import { PlusCircle, Clock, TrendingUp, BookOpen } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
 import Navbar from "@/components/Navbar";
 import LogCard from "@/components/LogCard";
@@ -79,6 +79,16 @@ export default function DashboardPage() {
   const weekQs = weekLogs.reduce((s, l) => s + l.questionCount, 0);
   const monthMins = monthLogs.reduce((s, l) => s + l.durationMinutes, 0);
   const totalMins = logs.reduce((s, l) => s + l.durationMinutes, 0);
+  const totalQs = logs.reduce((s, l) => s + l.questionCount, 0);
+
+  // Today stats
+  const todayStr = format(now, "yyyy-MM-dd");
+  const todayLogs = useMemo(
+    () => logs.filter((l) => l.date === todayStr),
+    [logs, todayStr]
+  );
+  const todayMins = todayLogs.reduce((s, l) => s + l.durationMinutes, 0);
+  const todayQs = todayLogs.reduce((s, l) => s + l.questionCount, 0);
 
   function fmtMins(m: number) {
     const h = Math.floor(m / 60);
@@ -150,18 +160,18 @@ export default function DashboardPage() {
           ) : (
             <>
               {/* Stats row */}
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 stagger-children">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
+                <StatCard
+                  icon={Clock}
+                  label="Bugün"
+                  value={fmtMins(todayMins)}
+                  sub={`${todayQs} soru`}
+                />
                 <StatCard
                   icon={Clock}
                   label="Bu Hafta"
                   value={fmtMins(weekMins)}
-                  sub={`${weekLogs.length} kayıt`}
-                />
-                <StatCard
-                  icon={Hash}
-                  label="Bu Hafta Soru"
-                  value={String(weekQs)}
-                  sub="toplam"
+                  sub={`${weekQs} soru · ${weekLogs.length} kayıt`}
                 />
                 <StatCard
                   icon={TrendingUp}
@@ -173,15 +183,16 @@ export default function DashboardPage() {
                   icon={BookOpen}
                   label="Toplam"
                   value={fmtMins(totalMins)}
-                  sub={`${logs.length} kayıt`}
+                  sub={`${totalQs} soru · ${logs.length} kayıt`}
                 />
-                {/* Streak card */}
-                <Card className="col-span-2 lg:col-span-1 hover:border-primary/20 transition-all duration-300 hover:-translate-y-0.5">
-                  <CardContent className="p-5 flex items-center h-full">
-                    <StreakBadge logs={logs} />
-                  </CardContent>
-                </Card>
               </div>
+
+              {/* Streak */}
+              <Card className="hover:border-primary/20 transition-all duration-300 hover:-translate-y-0.5">
+                <CardContent className="p-4 flex items-center">
+                  <StreakBadge logs={logs} />
+                </CardContent>
+              </Card>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
                 {/* Left column: Pie + bar */}

@@ -12,7 +12,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.push("/auth/login");
+      router.push("/landing");
       return;
     }
     // Authenticated but no profile yet (new Google user) — redirect to username setup
