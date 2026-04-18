@@ -52,6 +52,11 @@ export interface UserProfile {
     showQuestions: boolean;
     showSubjectBreakdown: boolean;
   };
+  notificationSettings?: {
+    enabled: boolean;
+    reminderHours: number[];
+    timezone: string;
+  };
 }
 
 export interface Friendship {
@@ -248,6 +253,57 @@ export function getLastStudiedByTopic(logs: StudyLog[]): Record<string, string> 
     }
   }
   return map;
+}
+
+// SM-2 tabanlı basit bir model
+// Her konu için kullanıcının kaç kez çalıştığını, ortalama çalışma süresini ve son tarihi alıp
+// bir "spaced repetition interval" (gün cinsinden) hesaplar.
+export function calculateSM2Intervals(logs: StudyLog[]): Record<string, { lastStudied: string; interval: number; repetitions: number; nextReview: string }> {
+  const tMap: Record<string, { lastStudied: string; reps: number; successFactor: number }> = {};
+  
+  for (const log of logs) {
+    const key = `${log.subject}:${log.topic}`;
+    if (!tMap[key]) {
+      tMap[key] = { lastStudied: log.date, reps: 1, successFactor: log.questionCount > 0 ? 1.2 : 0.8 };
+    } else {
+      tMap[key].reps += 1;
+      tMap[key].successFactor += log.questionCount > 0 ? 0.2 : 0; // Soru çözüldüyse pekişmiş sayılır
+      if (log.date > tMap[key].lastStudied) {
+        tMap[key].lastStudied = log.date;
+      }
+    }
+  }
+
+  const result: Record<string, { lastStudied: string; interval: number; repetitions: number; nextReview: string }> = {};
+  
+  for (const [key, data] of Object.entries(tMap)) {
+    // SM-2 Base logic: 
+    // Rep 1 = 1 day, Rep 2 = 6 days, Rep > 2 = (Rep - 1) * EF
+    // EF (Ease Factor) = 2.5
+    const easeFactor = Math.max(1.3, 2.5 * (data.successFactor / data.reps));
+    
+    let interval = 1;
+    if (data.reps === 2) interval = 6;
+    else if (data.reps > 2) {
+      interval = Math.round(6 * Math.pow(easeFactor, data.reps - 2));
+    }
+    
+    // Güvenlik tavanı: Max 60 gün
+    interval = Math.min(interval, 60);
+
+    const lastDate = new Date(data.lastStudied);
+    const nextDate = new Date(lastDate);
+    nextDate.setDate(lastDate.getDate() + interval);
+
+    result[key] = {
+      lastStudied: data.lastStudied,
+      interval,
+      repetitions: data.reps,
+      nextReview: nextDate.toISOString().split("T")[0],
+    };
+  }
+
+  return result;
 }
 
 // ─── Goals ────────────────────────────────────────────────────────────────────

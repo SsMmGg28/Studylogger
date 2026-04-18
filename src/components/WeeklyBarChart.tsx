@@ -11,7 +11,7 @@ import {
   Cell,
 } from "recharts";
 import { format, startOfWeek, addDays } from "date-fns";
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import type { StudyLog } from "@/lib/db";
 
 interface WeeklyBarChartProps {
@@ -60,7 +60,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-export default function WeeklyBarChart({ logs }: WeeklyBarChartProps) {
+export default React.memo(function WeeklyBarChart({ logs }: WeeklyBarChartProps) {
   const data = useMemo(() => {
     const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
     return DAY_LABELS.map((label, i) => {
@@ -111,4 +111,4 @@ export default function WeeklyBarChart({ logs }: WeeklyBarChartProps) {
       </BarChart>
     </ResponsiveContainer>
   );
-}
+});

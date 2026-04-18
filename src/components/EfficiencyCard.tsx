@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { format, startOfWeek, subWeeks } from "date-fns";
 import { tr } from "date-fns/locale";
 import { TrendingUp } from "lucide-react";
@@ -10,7 +10,7 @@ interface EfficiencyCardProps {
   logs: StudyLog[];
 }
 
-export default function EfficiencyCard({ logs }: EfficiencyCardProps) {
+export default React.memo(function EfficiencyCard({ logs }: EfficiencyCardProps) {
   const weeklyData = useMemo(() => {
     const now = new Date();
     const weeks: { label: string; start: string; end: string }[] = [];
@@ -142,4 +142,4 @@ export default function EfficiencyCard({ logs }: EfficiencyCardProps) {
       </div>
     </div>
   );
-}
+});

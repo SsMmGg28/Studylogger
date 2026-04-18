@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   PieChart,
   Pie,
@@ -65,7 +65,7 @@ function DefaultCenter({ cx, cy, label }: { cx: number; cy: number; label: strin
   );
 }
 
-export default function SubjectChart({ data, metric = "minutes" }: SubjectChartProps) {
+export default React.memo(function SubjectChart({ data, metric = "minutes" }: SubjectChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
 
   const chartData = useMemo(() =>
@@ -185,4 +185,4 @@ export default function SubjectChart({ data, metric = "minutes" }: SubjectChartP
       </div>
     </div>
   );
-}
+});

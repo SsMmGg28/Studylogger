@@ -6,6 +6,7 @@ import AuthGuard from "@/components/AuthGuard";
 import Navbar from "@/components/Navbar";
 import TopicBreakdownChart from "@/components/TopicBreakdownChart";
 import EfficiencyCard from "@/components/EfficiencyCard";
+import ExamTrendChart from "@/components/ExamTrendChart";
 import { useAuth } from "@/hooks/useAuth";
 import { useStudyLogs } from "@/hooks/useStudyLogs";
 import { getUserExamLogs } from "@/lib/db";
@@ -196,6 +197,30 @@ export default function StatsPage() {
                       />
                     </div>
 
+                    {/* Tam Deneme Grafikleri */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-[13px] font-semibold text-muted-foreground tracking-wide uppercase">
+                            TYT Net Gelişimi
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ExamTrendChart exams={tamExams} type="tyt" />
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-[13px] font-semibold text-muted-foreground tracking-wide uppercase">
+                            AYT Net Gelişimi
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ExamTrendChart exams={tamExams} type="ayt" />
+                        </CardContent>
+                      </Card>
+                    </div>
+
                     {/* Tam Deneme Stats */}
                     {tamExams.length > 0 && (
                       <Card>
@@ -205,10 +230,13 @@ export default function StatsPage() {
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <div className="space-y-4">
-                            {tamExams.map((exam) => (
-                              <div
-                                key={exam.id}
+                            <div className="space-y-4">
+                              {tamExams
+                                .slice()
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map((exam) => (
+                                <div
+                                  key={exam.id}
                                 className="p-4 rounded-xl border border-border/50 bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
                               >
                                 <div className="flex items-center justify-between mb-3">

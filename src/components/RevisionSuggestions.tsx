@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SUBJECT_MAP, SUBJECT_COLORS } from "@/lib/subjects";
-import { getLastStudiedByTopic } from "@/lib/db";
+import { calculateSM2Intervals } from "@/lib/db";
 import type { StudyLog } from "@/lib/db";
 
 interface RevisionSuggestionsProps {
@@ -19,19 +19,32 @@ export default function RevisionSuggestions({ logs }: RevisionSuggestionsProps) 
   const [expanded, setExpanded] = useState(false);
 
   const suggestions = useMemo(() => {
-    const lastStudied = getLastStudiedByTopic(logs);
+    const sm2Data = calculateSM2Intervals(logs);
     const today = new Date();
-    const items: { subject: string; topic: string; daysAgo: number; date: string }[] = [];
+    const items: { subject: string; topic: string; daysAgo: number; date: string; urgency: number; repBaseInfo: string }[] = [];
 
-    for (const [key, dateStr] of Object.entries(lastStudied)) {
-      const daysAgo = differenceInDays(today, parseISO(dateStr));
-      if (daysAgo >= 3) {
+    for (const [key, data] of Object.entries(sm2Data)) {
+      const { lastStudied, nextReview, repetitions } = data;
+      const daysAgo = differenceInDays(today, parseISO(lastStudied));
+      const tillNext = differenceInDays(parseISO(nextReview), today);
+      
+      // Eğer inceleme zamanı geldiyse veya geçtiyse (geciktikçe urgency artar)
+      if (tillNext <= 0 || daysAgo >= 3) {
         const [subject, topic] = key.split(":");
-        items.push({ subject, topic, daysAgo, date: dateStr });
+        items.push({ 
+          subject, 
+          topic, 
+          daysAgo, 
+          date: lastStudied,
+          // Eksi tillNext = Gecikme süresi. Gecikme ne kadar büyükse aciliyet o kadar yüksek
+          urgency: tillNext < 0 ? Math.abs(tillNext) + daysAgo : daysAgo,
+          repBaseInfo: `(Tekrar ${repetitions})`
+        });
       }
     }
 
-    return items.sort((a, b) => b.daysAgo - a.daysAgo);
+    // Urgency değerine göre azalan şekilde sırala (en asiller en üstte)
+    return items.sort((a, b) => b.urgency - a.urgency);
   }, [logs]);
 
   if (suggestions.length === 0) return null;
@@ -61,25 +74,28 @@ export default function RevisionSuggestions({ logs }: RevisionSuggestionsProps) 
         )}
       </CardHeader>
       <CardContent className="space-y-1.5">
-        {shown.map(({ subject, topic, daysAgo, date }) => {
+        {shown.map(({ subject, topic, daysAgo, date, urgency, repBaseInfo }) => {
           const color = SUBJECT_COLORS[subject] ?? "#6366f1";
-          const urgency = daysAgo >= 14 ? "text-red-400" : daysAgo >= 7 ? "text-orange-400" : "text-yellow-400";
+          const urgencyColor = urgency >= 14 ? "text-red-400" : urgency >= 7 ? "text-orange-400" : "text-yellow-400";
           return (
             <div
               key={`${subject}:${topic}`}
               className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg hover:bg-muted/50 transition-colors"
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-xs font-medium truncate">
+                <span className="text-xs font-medium truncate shrink-0">
                   {SUBJECT_MAP[subject]?.label ?? subject}
                 </span>
-                <span className="text-xs text-muted-foreground truncate">
+                <span className="text-xs text-muted-foreground truncate hidden sm:block">
                   {topic}
                 </span>
+                <span className="text-[10px] text-muted-foreground/50 hidden md:block">
+                  {repBaseInfo}
+                </span>
               </div>
-              <span className={`text-xs font-medium shrink-0 ${urgency}`}>
-                {daysAgo} gün önce
+              <span className={`text-xs font-medium shrink-0 ${urgencyColor}`}>
+                {daysAgo} gün geçti
               </span>
             </div>
           );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Select,
   SelectContent,
@@ -15,7 +15,7 @@ interface TopicBreakdownChartProps {
   logs: StudyLog[];
 }
 
-export default function TopicBreakdownChart({ logs }: TopicBreakdownChartProps) {
+export default React.memo(function TopicBreakdownChart({ logs }: TopicBreakdownChartProps) {
   const [selectedSubject, setSelectedSubject] = useState("");
   const [metric, setMetric] = useState<"minutes" | "questions">("minutes");
 
@@ -119,4 +119,4 @@ export default function TopicBreakdownChart({ logs }: TopicBreakdownChartProps) 
       )}
     </div>
   );
-}
+});

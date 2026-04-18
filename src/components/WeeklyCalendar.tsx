@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { format, subDays } from "date-fns";
 import type { StudyLog } from "@/lib/db";
 
@@ -36,7 +36,7 @@ function fmtTooltip(dateStr: string, minutes: number): string {
 
 const DAY_LABELS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 
-export default function WeeklyCalendar({ logs, weeks = 15 }: WeeklyCalendarProps) {
+export default React.memo(function WeeklyCalendar({ logs, weeks = 15 }: WeeklyCalendarProps) {
   const today = new Date();
 
   const dayMap = useMemo(() => {
@@ -115,5 +115,5 @@ export default function WeeklyCalendar({ logs, weeks = 15 }: WeeklyCalendarProps
       </div>
     </div>
   );
-}
+});
 
