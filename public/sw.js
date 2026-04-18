@@ -1,4 +1,4 @@
-const CACHE_NAME = "studylogger-v1";
+const CACHE_NAME = "studylogger-v2";
 const STATIC_ASSETS = [
   "/",
   "/log",
@@ -30,29 +30,63 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET and cross-origin requests
-  if (request.method !== "GET" || url.origin !== self.location.origin) return;
-
-  // Firebase/Firestore API calls: network-first
-  if (url.hostname.includes("firestore") || url.hostname.includes("firebase")) {
-    event.respondWith(
-      fetch(request).catch(() => caches.match(request))
-    );
+  // Skip non-GET requests and let browser handle cross-origin requests.
+  // Returning early here avoids invalid respondWith flows for requests we don't cache.
+  if (request.method !== "GET" || url.origin !== self.location.origin) {
     return;
   }
 
-  // Static assets & pages: stale-while-revalidate
   event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(request);
-      const fetchPromise = fetch(request).then((response) => {
-        if (response.ok) {
+
+      // HTML navigations: network-first so users get fresh app shell.
+      if (request.mode === "navigate") {
+        try {
+          const response = await fetch(request);
+          if (response && response.ok) {
+            cache.put(request, response.clone());
+          }
+          return response;
+        } catch {
+          if (cached) return cached;
+          return new Response("Offline", {
+            status: 503,
+            statusText: "Offline",
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          });
+        }
+      }
+
+      // Static assets/API pages: stale-while-revalidate with safe fallback.
+      if (cached) {
+        fetch(request)
+          .then((response) => {
+            if (response && response.ok) {
+              cache.put(request, response.clone());
+            }
+          })
+          .catch(() => {
+            // Silent catch: cached response is already being served.
+          });
+
+        return cached;
+      }
+
+      try {
+        const response = await fetch(request);
+        if (response && response.ok) {
           cache.put(request, response.clone());
         }
         return response;
-      }).catch(() => cached);
-
-      return cached || fetchPromise;
-    })
+      } catch {
+        return new Response("Offline", {
+          status: 503,
+          statusText: "Offline",
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      }
+    })()
   );
 });
