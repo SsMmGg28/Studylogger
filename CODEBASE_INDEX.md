@@ -18,6 +18,9 @@
 | Goals | src/app/goals/page.tsx, src/hooks/useGoals.ts, src/components/GoalCard.tsx, src/lib/db.ts | Weekly/monthly goal management for minutes or question counts. |
 | Statistics | src/app/stats/page.tsx, src/components/TopicBreakdownChart.tsx, src/components/EfficiencyCard.tsx | Topic-level breakdowns and twelve-week efficiency trend reporting. |
 | Friends and Leaderboard | src/app/friends/page.tsx, src/hooks/useFriends.ts, src/components/Leaderboard.tsx, src/lib/db.ts | Friend requests, accepted friendships, privacy-aware comparisons, and leaderboards. |
+| Focus Timer | src/components/FocusTimer.tsx, src/app/timer/page.tsx | Pomodoro-style stopwatch with YKS branch timings, animated phase orbs (focus/warning/danger), and post-session log-saving dialog. |
+| Exam Trend Charts | src/components/ExamTrendChart.tsx, src/app/stats/page.tsx | Recharts line chart for TYT/AYT total net score progression across full exam records. |
+| Desktop Companion API | src/app/api/desktop/log/route.ts, src/app/api/desktop/stats/route.ts | Bearer-auth REST endpoints used by the desktop app to post study sessions and retrieve today's stats. |
 | Notifications and Streaks | src/lib/notifications.ts, src/components/ExamCountdown.tsx, src/components/StreakBadge.tsx | Local reminder heuristics, notification permission handling, countdowns, and streak status. |
 | Offline and PWA | src/lib/offlineQueue.ts, public/sw.js, public/manifest.json, src/app/layout.tsx | IndexedDB queueing, service worker caching, and installable PWA metadata. |
 | Demo Mode | src/lib/demo-data.ts, src/hooks/useAuth.ts, src/hooks/useStudyLogs.ts, src/hooks/useFriends.ts | Local demo profile, logs, and friend comparisons without Firebase runtime setup. |
@@ -227,13 +230,63 @@
 |------|--------|------|-------------|
 | L33 | `GoalsPage` | component | Protected page that computes current progress from logs and persists new goals through `useGoals`. |
 
-### `src/app/stats/page.tsx`
-**Purpose**: Protected analytics page for topic breakdowns, efficiency charts, and summary totals.
-**Depends on**: src/components/AuthGuard.tsx, src/components/Navbar.tsx, src/components/TopicBreakdownChart.tsx, src/components/EfficiencyCard.tsx, src/hooks/useAuth.ts, src/hooks/useStudyLogs.ts, src/components/ui/card.tsx
+### `src/middleware.ts`
+**Purpose**: Next.js Edge middleware that guards protected routes by checking `session`, `client-session`, and `demo-mode` cookies and redirects unauthenticated users to `/landing`.
+**Depends on**: None (Next.js request only)
 
 | Line | Symbol | Type | Description |
 |------|--------|------|-------------|
-| L12 | `StatsPage` | component | Protected statistics page that renders topic-level and weekly efficiency analysis for current logs. |
+| L5 | `middleware` | function | Checks auth cookies; redirects unauthenticated to `/landing`; redirects authenticated away from public paths (`/landing`, `/auth/login`, `/auth/register`). |
+| L42 | `config` | const | Matcher config — applies to all routes except `_next/static`, `_next/image`, `favicon.ico`, `sw.js`, `manifest.json`. |
+
+### `src/app/api/auth/session/route.ts`
+**Purpose**: API route that creates (POST) and deletes (DELETE) Firebase session cookies using Firebase Admin SDK.
+**Depends on**: src/lib/firebase-admin.ts
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L4 | `POST` | function | Verifies Firebase `idToken`, creates 14-day `session` HttpOnly cookie via `adminAuth.createSessionCookie`. |
+| L37 | `DELETE` | function | Deletes `session` and `client-session` cookies. |
+
+### `src/app/api/cron/reminders/route.ts`
+**Purpose**: Cron endpoint for push notification reminders — currently disabled, returns `{ status: "disabled" }`.
+**Depends on**: None
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L3 | `GET` | function | Returns disabled status; originally intended for scheduled reminder notifications. |
+
+### `src/app/api/desktop/log/route.ts`
+**Purpose**: Desktop companion API — POST endpoint to add a study log from the desktop app, authenticated with `DESKTOP_API_SECRET` bearer token.
+**Depends on**: src/lib/firebase-admin.ts
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L6 | `POST` | function | Validates `Bearer` token, writes study log to Firestore `studyLogs` collection with `source: "desktop_app"`. |
+
+### `src/app/api/desktop/stats/route.ts`
+**Purpose**: Desktop companion API — GET endpoint returning today's study minutes/questions for a given UID.
+**Depends on**: src/lib/firebase-admin.ts
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L7 | `GET` | function | Validates `Bearer` token, queries today's `studyLogs` by UID, returns `{ todayMinutes, todayQuestions, displayName }`. |
+
+### `src/app/timer/page.tsx`
+**Purpose**: Timer page — thin wrapper that renders `FocusTimer` inside `AuthGuard` + `Navbar`.
+**Depends on**: src/components/AuthGuard.tsx, src/components/Navbar.tsx, src/components/FocusTimer.tsx
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L6 | `TimerPage` | component | Renders `<AuthGuard><Navbar /><FocusTimer /></AuthGuard>`. |
+
+### `src/app/stats/page.tsx`
+**Purpose**: Protected analytics page for topic breakdowns, efficiency charts, exam trend charts, and summary totals.
+**Depends on**: src/components/AuthGuard.tsx, src/components/Navbar.tsx, src/components/TopicBreakdownChart.tsx, src/components/EfficiencyCard.tsx, src/components/ExamTrendChart.tsx, src/hooks/useAuth.ts, src/hooks/useStudyLogs.ts, src/lib/db.ts, src/components/ui/card.tsx
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L19 | `StatsPage` | component | Protected two-tab statistics page: study stats (topic breakdown, efficiency trend, summary) and exam stats (tam & branch exam analysis with `ExamTrendChart`). |
 
 ### `src/app/settings/page.tsx`
 **Purpose**: Protected settings page for profile display name updates, privacy toggles, and notification permission setup.
@@ -362,6 +415,35 @@
 | Line | Symbol | Type | Description |
 |------|--------|------|-------------|
 | L12 | `StreakBadge` | component | Badge component that derives current and longest streak lengths from `logs: StudyLog[]`. |
+| L58 | `calcLongest` | function | Iterates sorted date set, counts max consecutive days (1-day diff). |
+
+### `src/components/ExamTrendChart.tsx`
+**Purpose**: Recharts LineChart showing total net score progression over time for TYT or AYT full exams.
+**Depends on**: src/lib/db.ts
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L11 | `ExamTrendChartProps` | interface | `{ exams: ExamLog[], type: "tyt" \| "ayt" }` |
+| L15 | `ExamTrendChart` | component | Memoized; filters to `examCategory === "tam"` for given type; Y-axis max 120 (TYT) or 80 (AYT). |
+
+### `src/components/FocusTimer.tsx`
+**Purpose**: Full-featured focus timer with YKS branch timings (TYT/AYT subjects), three-phase system (focus/warning/danger), animated glow orbs, and post-session log-saving dialog.
+**Depends on**: src/hooks/useAuth.ts, src/hooks/useStudyLogs.ts, src/lib/subjects.ts, src/lib/utils.ts
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L29 | `BranchTiming` | interface | `{ label, idealSeconds, warningSeconds }` — timing config per YKS branch. |
+| L32 | `BRANCH_TIMINGS` | const | 11-entry map of branch keys → `BranchTiming` (e.g. `tyt_matematik: { idealSeconds: 75*60, warningSeconds: 55*60 }`). |
+| L48 | `BRANCH_TO_SUBJECT` | const | Maps branch timing key → SUBJECTS id (null = multi-subject picker required). |
+| L54 | `Phase` | type | `"focus" \| "warning" \| "danger"` — timer phase enum. |
+| L57 | `DANGER_THRESHOLD_RATIO` | const | `1.15` — danger starts at 115% of ideal time. |
+| L60 | `getDangerSeconds` | function | `timing.idealSeconds * DANGER_THRESHOLD_RATIO`. |
+| L64 | `getPhase` | function | Returns `Phase` based on elapsed vs. warning/danger thresholds. |
+| L70 | `getPhaseProgress` | function | Returns 0–1 progress fraction within current phase. |
+| L82 | `PHASE_COLORS` | const | Phase → `{ hue, chroma, name }` in oklch color space (cyan/yellow/orange). |
+| L87 | `formatTime` | function | Formats seconds as `MM:SS` or `HH:MM:SS`. |
+| L93 | `GlowOrb` | component | Animated background orb with phase-based oklch color and size randomization. |
+| L121 | `FocusTimer` | component | Full timer component; manages `elapsed` via `setInterval`; `saveSession` opens dialog to pick subject/topic/questions before calling `useStudyLogs.add()`. |
 
 ### `src/components/ui/avatar.tsx`
 **Purpose**: Avatar primitive wrappers and grouped avatar helpers built on Radix UI.
@@ -824,3 +906,26 @@ Alphabetical cross-reference of every symbol with its file location.
 | `viewport` | const | `src/app/layout.tsx` | L29 |
 | `WeeklyBarChart` | component | `src/components/WeeklyBarChart.tsx` | L63 |
 | `WeeklyCalendar` | component | `src/components/WeeklyCalendar.tsx` | L39 |
+| `adminAuth` | const | `src/lib/firebase-admin.ts` | L25 |
+| `adminDb` | const | `src/lib/firebase-admin.ts` | L24 |
+| `adminMessaging` | const | `src/lib/firebase-admin.ts` | L26 |
+| `BRANCH_TIMINGS` | const | `src/components/FocusTimer.tsx` | L32 |
+| `BRANCH_TO_SUBJECT` | const | `src/components/FocusTimer.tsx` | L48 |
+| `BranchTiming` | interface | `src/components/FocusTimer.tsx` | L29 |
+| `calcLongest` | function | `src/components/StreakBadge.tsx` | L58 |
+| `calculateSM2Intervals` | function | `src/lib/db.ts` | L246 |
+| `DANGER_THRESHOLD_RATIO` | const | `src/components/FocusTimer.tsx` | L57 |
+| `ExamTrendChart` | component | `src/components/ExamTrendChart.tsx` | L15 |
+| `ExamTrendChartProps` | interface | `src/components/ExamTrendChart.tsx` | L11 |
+| `FocusTimer` | component | `src/components/FocusTimer.tsx` | L121 |
+| `formatTime` | function | `src/components/FocusTimer.tsx` | L87 |
+| `getDangerSeconds` | function | `src/components/FocusTimer.tsx` | L60 |
+| `getPhase` | function | `src/components/FocusTimer.tsx` | L64 |
+| `getPhaseProgress` | function | `src/components/FocusTimer.tsx` | L70 |
+| `GlowOrb` | component | `src/components/FocusTimer.tsx` | L93 |
+| `isFirebaseAdminConfigured` | const | `src/lib/firebase-admin.ts` | L6 |
+| `middleware` | function | `src/middleware.ts` | L5 |
+| `PHASE_COLORS` | const | `src/components/FocusTimer.tsx` | L82 |
+| `Phase` | type | `src/components/FocusTimer.tsx` | L54 |
+| `stripUndefined` | function | `src/lib/db.ts` | L17 |
+| `TimerPage` | component | `src/app/timer/page.tsx` | L6 |

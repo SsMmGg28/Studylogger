@@ -23,7 +23,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      router.push("/");
+      window.location.href = "/";
     } catch {
       toast.error("E-posta veya şifre hatalı.");
     } finally {
@@ -41,7 +41,7 @@ export default function LoginPage() {
     setGoogleLoading(true);
     try {
       const { isNew } = await loginWithGoogle();
-      router.push(isNew ? "/auth/setup-username" : "/");
+      window.location.href = isNew ? "/auth/setup-username" : "/";
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
       if (!msg.includes("popup-closed")) {

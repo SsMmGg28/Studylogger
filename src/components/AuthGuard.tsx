@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { clearClientSessionHint } from "@/lib/auth";
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
@@ -12,7 +13,12 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.push("/landing");
+      // Clear stale session cookies before redirecting to prevent an
+      // infinite redirect loop between middleware (cookie present → /dashboard)
+      // and AuthGuard (no Firebase user → /landing).
+      clearClientSessionHint();
+      fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
+      router.push("/auth/login");
       return;
     }
     // Authenticated but no profile yet (new Google user) — redirect to username setup

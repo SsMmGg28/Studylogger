@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Play, Pause, RotateCcw, Timer, ChevronDown, BookPlus, Zap } from "lucide-react";
+import { Play, Pause, RotateCcw, Timer, BookPlus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -21,8 +23,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { useStudyLogs } from "@/hooks/useStudyLogs";
-import { SUBJECTS } from "@/lib/subjects";
+import { addExamLog } from "@/lib/db";
+import { DEMO_UID } from "@/lib/demo-data";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -47,21 +49,6 @@ const BRANCH_TIMINGS: Record<string, BranchTiming> = {
   ayt_fizik:      { label: "AYT Fizik",       idealSeconds: 20 * 60, warningSeconds: 15 * 60 },
   ayt_kimya:      { label: "AYT Kimya",       idealSeconds: 20 * 60, warningSeconds: 15 * 60 },
   ayt_biyoloji:   { label: "AYT Biyoloji",    idealSeconds: 15 * 60, warningSeconds: 11 * 60 },
-};
-
-// Maps branch key → single subject id in SUBJECTS (null = multi-subject, user must pick)
-const BRANCH_TO_SUBJECT: Record<string, string | null> = {
-  tyt_turkce:    "turkce",
-  tyt_matematik: "tyt_matematik",
-  tyt_sosyal:    null,
-  tyt_fizik:     "tyt_fizik",
-  tyt_kimya:     "tyt_kimya",
-  tyt_biyoloji:  "tyt_biyoloji",
-  tyt_fen:       null,
-  ayt_matematik: "ayt_matematik",
-  ayt_fizik:     "ayt_fizik",
-  ayt_kimya:     "ayt_kimya",
-  ayt_biyoloji:  "ayt_biyoloji",
 };
 
 type Phase = "focus" | "warning" | "danger";
@@ -149,112 +136,90 @@ function GlowOrb({ phase, index, intensity }: GlowOrbProps) {
   );
 }
 
-// ─── Save Log Dialog ──────────────────────────────────────────────────────
+// ─── Save Exam Log Dialog ─────────────────────────────────────────────────
 interface SaveLogDialogProps {
   open: boolean;
   onClose: () => void;
   elapsedSeconds: number;
   branchKey: string;
-  onSave: (data: {
-    subject: string; topic: string; durationMinutes: number;
-    questionCount: number; notes?: string; date: string;
-  }) => Promise<void>;
+  onSave: (net: number | undefined, notes: string | undefined) => Promise<void>;
 }
 
 function SaveLogDialog({ open, onClose, elapsedSeconds, branchKey, onSave }: SaveLogDialogProps) {
-  const examType = branchKey.startsWith("ayt_") ? "ayt" : "tyt";
-  const [subject, setSubject] = useState(BRANCH_TO_SUBJECT[branchKey] ?? "");
-  const [topic, setTopic] = useState("");
-  const [questions, setQuestions] = useState("");
+  const timing = BRANCH_TIMINGS[branchKey];
+  const [net, setNet] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
   const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
-  const today = format(new Date(), "yyyy-MM-dd");
 
   useEffect(() => {
-    if (open) {
-      setSubject(BRANCH_TO_SUBJECT[branchKey] ?? "");
-      setTopic(""); setQuestions(""); setNotes("");
-    }
-  }, [open, branchKey]);
-
-  const filteredSubjects = SUBJECTS.filter((s) => s.type === examType);
-  const selectedSubject = SUBJECTS.find((s) => s.id === subject);
+    if (open) { setNet(""); setNotes(""); }
+  }, [open]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!subject || !topic) return;
     setSaving(true);
     try {
-      await onSave({ subject, topic, durationMinutes, questionCount: Number(questions) || 0, notes: notes.trim() || undefined, date: today });
+      await onSave(
+        net !== "" ? Number(net) : undefined,
+        notes.trim() || undefined,
+      );
       onClose();
     } finally { setSaving(false); }
   }
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BookPlus className="w-5 h-5 text-primary" />
-            Çalışmayı Kaydet
+            Denemeyi Kaydet
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-          {/* Duration (read-only) */}
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/8 border border-primary/20">
-            <Timer className="w-4 h-4 text-primary shrink-0" />
-            <div>
-              <div className="text-xs text-muted-foreground">Geçen Süre</div>
-              <div className="text-sm font-semibold text-primary">
-                {formatTime(elapsedSeconds)} ({durationMinutes} dakika)
+          {/* Branch + duration summary */}
+          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-primary/8 border border-primary/20">
+            <Timer className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <div className="text-sm font-semibold text-primary">{timing?.label}</div>
+              <div className="text-xs text-muted-foreground">
+                {formatTime(elapsedSeconds)} — {durationMinutes} dakika
               </div>
             </div>
           </div>
-          {/* Subject */}
+
+          {/* Net score */}
           <div className="space-y-1.5">
-            <Label>Ders</Label>
-            <Select value={subject} onValueChange={(v) => { setSubject(v); setTopic(""); }} required>
-              <SelectTrigger><SelectValue placeholder="Ders seçin…" /></SelectTrigger>
-              <SelectContent>
-                {filteredSubjects.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <span className="flex items-center gap-2">
-                      <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                      {s.label}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="net">
+              Net <span className="text-muted-foreground text-xs">(opsiyonel)</span>
+            </Label>
+            <Input
+              id="net"
+              type="number"
+              step="0.25"
+              min="0"
+              placeholder="ör. 11.75"
+              value={net}
+              onChange={(e) => setNet(e.target.value)}
+              autoFocus
+            />
           </div>
-          {/* Topic */}
-          {subject && selectedSubject && (
-            <div className="space-y-1.5">
-              <Label>Konu</Label>
-              <Select value={topic} onValueChange={setTopic} required>
-                <SelectTrigger><SelectValue placeholder="Konu seçin…" /></SelectTrigger>
-                <SelectContent>
-                  {selectedSubject.topics.map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          {/* Questions */}
-          <div className="space-y-1.5">
-            <Label htmlFor="qc">Çözülen Soru <span className="text-muted-foreground text-xs">(opsiyonel)</span></Label>
-            <Input id="qc" type="number" min="0" placeholder="0" value={questions} onChange={(e) => setQuestions(e.target.value)} />
-          </div>
+
           {/* Notes */}
           <div className="space-y-1.5">
             <Label>Not <span className="text-muted-foreground text-xs">(opsiyonel)</span></Label>
-            <Textarea placeholder="Bu çalışmaya dair notlar…" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+            <Textarea
+              placeholder="Bu deneme hakkında notlar…"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+            />
           </div>
+
           <div className="flex gap-2 pt-1">
-            <Button type="submit" disabled={saving || !subject || !topic} className="flex-1">
+            <Button type="submit" disabled={saving} className="flex-1">
               {saving ? "Kaydediliyor…" : "Kaydet"}
             </Button>
             <Button type="button" variant="outline" onClick={onClose}>İptal</Button>
@@ -294,12 +259,10 @@ function DevSpeedPanel({ speed, onSpeedChange }: { speed: number; onSpeedChange:
 // ─── Main Component ─────────────────────────────────────────────────────────
 export default function FocusTimer() {
   const { user } = useAuth();
-  const { add: addLog } = useStudyLogs(user?.uid ?? null);
 
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [showSelector, setShowSelector] = useState(false);
   const [showSave, setShowSave] = useState(false);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -369,65 +332,65 @@ export default function FocusTimer() {
           <h1 className="text-3xl font-bold tracking-tight">Deneme Zamanlayıcı</h1>
         </div>
 
-        {/* Branch Selector — opens upward */}
+        {/* Branch Selector */}
         <div className="w-full max-w-md animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
-          <div className="relative">
-            <button
-              onClick={() => setShowSelector(!showSelector)}
-              disabled={isRunning}
+          <Select
+            value={selectedBranch ?? undefined}
+            onValueChange={(value) => {
+              setSelectedBranch(value);
+              reset();
+            }}
+            disabled={isRunning}
+          >
+            <SelectTrigger
               className={cn(
-                "w-full flex items-center justify-between px-4 py-3 rounded-xl",
-                "bg-white/8 border border-white/15",
-                "text-left transition-all duration-200",
-                "hover:bg-white/12 hover:border-white/22",
-                "disabled:opacity-50 disabled:cursor-not-allowed",
+                "h-12 w-full rounded-xl border border-white/15 bg-white/8 px-4 text-left text-sm font-medium",
+                "transition-all duration-200 hover:bg-white/12 hover:border-white/22",
+                "focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:border-primary/30",
+                "data-[placeholder]:text-muted-foreground",
                 selectedBranch ? "text-foreground" : "text-muted-foreground"
               )}
             >
-              <span className="text-sm font-medium">
-                {selectedBranch ? BRANCH_TIMINGS[selectedBranch].label : "Branş seçin..."}
-              </span>
-              <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", showSelector && "rotate-180")} />
-            </button>
-
-            {showSelector && (
-              <div
-                className="absolute bottom-full left-0 right-0 mb-2 rounded-xl overflow-hidden z-50 animate-fade-in"
-                style={{ background: "oklch(0.19 0.018 265)", border: "1px solid oklch(1 0 0 / 14%)", boxShadow: "0 -8px 40px oklch(0 0 0 / 0.5)" }}
-              >
-                <div className="p-2 max-h-72 overflow-y-auto">
-                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">TYT</div>
-                  {tytBranches.map(([key, val]) => (
-                    <button
-                      key={key}
-                      onClick={() => { setSelectedBranch(key); setShowSelector(false); reset(); }}
-                      className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors",
-                        selectedBranch === key ? "bg-primary/15 text-primary" : "hover:bg-white/8 text-foreground"
-                      )}
-                    >
+              <SelectValue placeholder="Branş seçin..." />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              sideOffset={8}
+              className="z-[120] max-h-72 w-[var(--radix-select-trigger-width)] rounded-xl border border-white/15 bg-[oklch(0.19_0.018_265)] p-2 text-foreground shadow-[0_8px_40px_oklch(0_0_0_/_0.5)]"
+            >
+              <SelectGroup>
+                <SelectLabel className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">TYT</SelectLabel>
+                {tytBranches.map(([key, val]) => (
+                  <SelectItem
+                    key={key}
+                    value={key}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-white/8 data-[state=checked]:bg-primary/15 data-[state=checked]:text-primary"
+                  >
+                    <span className="flex w-full items-center justify-between gap-3">
                       <span>{val.label}</span>
                       <span className="text-xs text-muted-foreground">{val.idealSeconds / 60} dk</span>
-                    </button>
-                  ))}
-                  <div className="px-2 py-1.5 mt-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">AYT</div>
-                  {aytBranches.map(([key, val]) => (
-                    <button
-                      key={key}
-                      onClick={() => { setSelectedBranch(key); setShowSelector(false); reset(); }}
-                      className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors",
-                        selectedBranch === key ? "bg-primary/15 text-primary" : "hover:bg-white/8 text-foreground"
-                      )}
-                    >
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              <SelectGroup>
+                <SelectLabel className="mt-1 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">AYT</SelectLabel>
+                {aytBranches.map(([key, val]) => (
+                  <SelectItem
+                    key={key}
+                    value={key}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-white/8 data-[state=checked]:bg-primary/15 data-[state=checked]:text-primary"
+                  >
+                    <span className="flex w-full items-center justify-between gap-3">
                       <span>{val.label}</span>
                       <span className="text-xs text-muted-foreground">{val.idealSeconds / 60} dk</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Timer Display */}
@@ -616,9 +579,19 @@ export default function FocusTimer() {
           onClose={() => setShowSave(false)}
           elapsedSeconds={elapsed}
           branchKey={selectedBranch}
-          onSave={async (data) => {
-            await addLog(data);
-            toast.success("Çalışma kaydedildi!");
+          onSave={async (net, notes) => {
+            const uid = user?.uid ?? DEMO_UID;
+            const durationMinutes = Math.max(1, Math.round(elapsed / 60));
+            await addExamLog(uid, {
+              examType: selectedBranch.startsWith("ayt_") ? "ayt" : "tyt",
+              examCategory: "brans",
+              date: format(new Date(), "yyyy-MM-dd"),
+              subject: BRANCH_TIMINGS[selectedBranch].label,
+              net,
+              durationMinutes,
+              notes,
+            });
+            toast.success("Deneme kaydedildi!");
             reset();
           }}
         />
