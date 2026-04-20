@@ -12,18 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { User, Lock, Bell, Clock3 } from "lucide-react";
+import { User, Lock, Bell } from "lucide-react";
 import { requestNotificationPermission } from "@/lib/notifications";
-
-const DEFAULT_NOTIFICATION_SETTINGS = {
-  enabled: true,
-  reminderHours: [19],
-  timezone: "Europe/Istanbul",
-};
-
-function normalizeHours(hours: number[]): number[] {
-  return [...new Set(hours.filter((h) => Number.isInteger(h) && h >= 0 && h <= 23))].sort((a, b) => a - b);
-}
 
 function PrivacyToggle({
   label,
@@ -58,42 +48,13 @@ export default function SettingsPage() {
     }
   );
   const [saving, setSaving] = useState(false);
-  const [notificationEnabled, setNotificationEnabled] = useState(true);
-  const [reminderHours, setReminderHours] = useState<number[]>([19]);
-  const [reminderHourInput, setReminderHourInput] = useState("19");
-  const [timezone, setTimezone] = useState("Europe/Istanbul");
 
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.displayName);
       setPrivacy(profile.privacySettings);
-      const settings = profile.notificationSettings ?? {
-        ...DEFAULT_NOTIFICATION_SETTINGS,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_NOTIFICATION_SETTINGS.timezone,
-      };
-      setNotificationEnabled(settings.enabled);
-      setReminderHours(normalizeHours(settings.reminderHours));
-      setTimezone(settings.timezone || DEFAULT_NOTIFICATION_SETTINGS.timezone);
     }
   }, [profile]);
-
-  function addReminderHour(hour: number) {
-    const normalized = normalizeHours([...reminderHours, hour]);
-    if (normalized.length === reminderHours.length) {
-      toast.info("Bu saat zaten listede.");
-      return;
-    }
-    setReminderHours(normalized);
-  }
-
-  function removeReminderHour(hour: number) {
-    const updated = reminderHours.filter((h) => h !== hour);
-    if (updated.length === 0) {
-      toast.error("En az bir bildirim saati seçmelisiniz.");
-      return;
-    }
-    setReminderHours(updated);
-  }
 
   async function handleSave() {
     if (!user) return;
@@ -102,11 +63,6 @@ export default function SettingsPage() {
       await updateUserProfile(user.uid, {
         displayName,
         privacySettings: privacy,
-        notificationSettings: {
-          enabled: notificationEnabled,
-          reminderHours: normalizeHours(reminderHours),
-          timezone,
-        },
       });
       toast.success("Ayarlar kaydedildi.");
     } catch {
@@ -225,83 +181,6 @@ export default function SettingsPage() {
                 >
                   İzin Ver
                 </Button>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 py-3 border-t border-border/50">
-                <div>
-                  <p className="text-sm font-medium">Planlı Hatırlatmalar</p>
-                  <p className="text-xs text-muted-foreground">
-                    Seçtiğiniz saatlerde, o gün kayıt yoksa hatırlatma gönderilir.
-                  </p>
-                </div>
-                <Switch checked={notificationEnabled} onCheckedChange={setNotificationEnabled} />
-              </div>
-
-              <div className="py-3 border-t border-border/50 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Clock3 className="w-4 h-4 text-muted-foreground" />
-                  <p className="text-sm font-medium">Bildirim Saatleri</p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {reminderHours.map((hour) => (
-                    <Button
-                      key={hour}
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => removeReminderHour(hour)}
-                    >
-                      {String(hour).padStart(2, "0")}:00 kaldır
-                    </Button>
-                  ))}
-                </div>
-
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={23}
-                    value={reminderHourInput}
-                    onChange={(e) => setReminderHourInput(e.target.value)}
-                    placeholder="Saat (0-23)"
-                    disabled={!notificationEnabled}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={!notificationEnabled}
-                    onClick={() => {
-                      const hour = Number(reminderHourInput);
-                      if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
-                        toast.error("Geçerli bir saat girin (0-23).");
-                        return;
-                      }
-                      addReminderHour(hour);
-                    }}
-                  >
-                    Saat Ekle
-                  </Button>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {[8, 12, 16, 19, 21].map((h) => (
-                    <Button
-                      key={h}
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={!notificationEnabled}
-                      onClick={() => addReminderHour(h)}
-                    >
-                      {String(h).padStart(2, "0")}:00 hızlı ekle
-                    </Button>
-                  ))}
-                </div>
-
-                <p className="text-xs text-muted-foreground">
-                  Saat dilimi: {timezone}. Vercel cron görevinin saatlik çalışması önerilir.
-                </p>
               </div>
             </CardContent>
           </Card>
