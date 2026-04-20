@@ -1,6 +1,6 @@
 # Codebase Index
 > Auto-generated complete reference of all files, features, functions, and their locations.
-> Last generated: 2026-04-13
+> Last generated: 2026-04-20
 
 ## Table of Contents
 - [Features Overview](#features-overview)
