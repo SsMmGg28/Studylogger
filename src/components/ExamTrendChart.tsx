@@ -79,7 +79,10 @@ export default React.memo(function ExamTrendChart({ exams, type }: ExamTrendChar
             }}
             labelStyle={{ color: "#94a3b8", fontWeight: 600, marginBottom: "4px" }}
             itemStyle={{ color: type === "tyt" ? "#93c5fd" : "#d8b4fe", fontWeight: 600 }}
-            formatter={(value: number) => [`${value} Net`, "Toplam Net"]}
+            formatter={(value) => {
+              const safeValue = typeof value === "number" ? value : Number(value ?? 0);
+              return [`${safeValue} Net`, "Toplam Net"];
+            }}
             labelFormatter={(label) => label}
           />
           <Line
