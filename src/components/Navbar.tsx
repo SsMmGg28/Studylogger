@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BookOpen, LayoutDashboard, PlusCircle, History, Users, Settings, LogOut, Target, BarChart3, Timer } from "lucide-react";
+import { BookOpen, LayoutDashboard, PlusCircle, History, Users, Settings, LogOut, Target, BarChart3, Timer, Network } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { logout } from "@/lib/auth";
@@ -24,6 +24,7 @@ const navItems = [
   { href: "/goals", label: "Hedefler", mobileLabel: "Hedef", icon: Target },
   { href: "/stats", label: "İstatistik", mobileLabel: "İstat.", icon: BarChart3 },
   { href: "/friends", label: "Arkadaşlar", mobileLabel: "Arkadaş", icon: Users },
+  { href: "/topics", label: "Kazanımlar", mobileLabel: "Konu", icon: Network },
 ];
 
 export default function Navbar() {

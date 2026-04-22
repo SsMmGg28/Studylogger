@@ -12,6 +12,8 @@ import {
   Timestamp,
   setDoc,
   writeBatch,
+  arrayUnion,
+  arrayRemove,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -324,4 +326,35 @@ export async function setGoal(
 
 export async function deleteGoal(uid: string, goalId: string): Promise<void> {
   await deleteDoc(doc(db, "users", uid, "goals", goalId));
+}
+
+// ─── Topic Progress ────────────────────────────────────────────────────────────
+
+export interface TopicProgress {
+  completed: string[];
+}
+
+/** Fetch all completed topics for a user, keyed by subjectId. */
+export async function getTopicProgress(uid: string): Promise<Record<string, string[]>> {
+  const snap = await getDocs(collection(db, "users", uid, "topicProgress"));
+  const result: Record<string, string[]> = {};
+  snap.docs.forEach((d) => {
+    result[d.id] = (d.data() as TopicProgress).completed ?? [];
+  });
+  return result;
+}
+
+/** Mark or unmark a single topic as completed using atomic array operations. */
+export async function setTopicCompleted(
+  uid: string,
+  subjectId: string,
+  topic: string,
+  completed: boolean
+): Promise<void> {
+  const ref = doc(db, "users", uid, "topicProgress", subjectId);
+  await setDoc(
+    ref,
+    { completed: completed ? arrayUnion(topic) : arrayRemove(topic) },
+    { merge: true }
+  );
 }
