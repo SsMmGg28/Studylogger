@@ -358,3 +358,64 @@ export async function setTopicCompleted(
     { merge: true }
   );
 }
+
+// ─── Weekly Schedule ──────────────────────────────────────────────────────────
+
+export interface ScheduleItem {
+  id: string;
+  uid: string;
+  subject: string;
+  topic?: string;       // optional when branch is used
+  date: string;         // YYYY-MM-DD (the specific day)
+  weekStart: string;    // YYYY-MM-DD (Monday of the week)
+  targetQuestions?: number;
+  targetMinutes?: number;
+  branch?: string;
+  status: "pending" | "done";
+  actualQuestions?: number;
+  actualMinutes?: number;
+  completedAt?: Timestamp;
+}
+
+export async function getScheduleItems(uid: string, weekStart: string): Promise<ScheduleItem[]> {
+  const q = query(
+    collection(db, "users", uid, "schedule"),
+    where("weekStart", "==", weekStart)
+  );
+  const snap = await getDocs(q);
+  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ScheduleItem));
+  return items.sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+export async function getAllScheduleItems(uid: string): Promise<ScheduleItem[]> {
+  const snap = await getDocs(collection(db, "users", uid, "schedule"));
+  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ScheduleItem));
+  return items.sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+export async function addScheduleItem(
+  uid: string,
+  data: Omit<ScheduleItem, "id" | "uid" | "completedAt">
+): Promise<string> {
+  const ref = await addDoc(
+    collection(db, "users", uid, "schedule"),
+    stripUndefined({ ...data, uid })
+  );
+  return ref.id;
+}
+
+export async function completeScheduleItem(
+  uid: string,
+  itemId: string,
+  actual: { actualQuestions?: number; actualMinutes?: number }
+): Promise<void> {
+  await updateDoc(doc(db, "users", uid, "schedule", itemId), stripUndefined({
+    ...actual,
+    status: "done",
+    completedAt: serverTimestamp(),
+  } as Record<string, unknown>));
+}
+
+export async function deleteScheduleItem(uid: string, itemId: string): Promise<void> {
+  await deleteDoc(doc(db, "users", uid, "schedule", itemId));
+}

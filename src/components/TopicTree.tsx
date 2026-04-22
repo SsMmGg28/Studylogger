@@ -12,12 +12,26 @@ import {
   Clock,
   Hash,
   BookOpen,
+  Plus,
+  CalendarDays,
 } from "lucide-react";
+import { format, parseISO, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
 import { SUBJECTS, type Subject } from "@/lib/subjects";
 import { useTopicProgress } from "@/hooks/useTopicProgress";
 import { useStudyLogs } from "@/hooks/useStudyLogs";
 import { useAuth } from "@/hooks/useAuth";
+import { addScheduleItem, getAllScheduleItems, type ScheduleItem } from "@/lib/db";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,6 +61,12 @@ interface TopicStat {
   totalMinutes: number;
   totalQuestions: number;
   sessions: number;
+}
+
+interface TopicTaskInfo {
+  total: number;
+  pending: number;
+  done: number;
 }
 
 // ─── Subject Card (grid tile — click to open panel) ────────────────────────────
@@ -120,7 +140,9 @@ interface SubjectPanelProps {
   onClose: () => void;
   topicStats: Record<string, TopicStat>;
   onToggle: (topic: string) => void;
+  onQuickAdd: (topic: string) => void;
   isCompleted: (topic: string) => boolean;
+  getTaskInfo: (topic: string) => TopicTaskInfo;
   completedCount: number;
 }
 
@@ -129,7 +151,9 @@ function SubjectPanel({
   onClose,
   topicStats,
   onToggle,
+  onQuickAdd,
   isCompleted,
+  getTaskInfo,
   completedCount,
 }: SubjectPanelProps) {
   // displaySubject persists while closing animation plays
@@ -273,12 +297,12 @@ function SubjectPanel({
           {topics.map((topic, i) => {
             const stat = topicStats[topic];
             const done = isCompleted(topic);
+            const taskInfo = getTaskInfo(topic);
             return (
-              <button
+              <div
                 key={topic}
-                onClick={() => onToggle(topic)}
                 className={cn(
-                  "group w-full flex items-center gap-3 rounded-xl px-4 py-3 text-left",
+                  "group w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left",
                   "transition-all duration-200 hover:bg-white/6 active:scale-[0.99]",
                   "animate-fade-in-up border",
                   done
@@ -287,50 +311,72 @@ function SubjectPanel({
                 )}
                 style={{ animationDelay: `${i * 0.025}s`, animationFillMode: "both" }}
               >
-                {/* Completion icon */}
-                <span
-                  className={cn(
-                    "shrink-0 transition-all duration-300",
-                    done
-                      ? "text-emerald-400"
-                      : "text-muted-foreground/40 group-hover:text-muted-foreground/70"
-                  )}
+                <button
+                  type="button"
+                  onClick={() => onToggle(topic)}
+                  className="flex-1 min-w-0 flex items-center gap-3 rounded-lg px-1 py-1.5"
                 >
-                  {done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-                </span>
+                  {/* Completion icon */}
+                  <span
+                    className={cn(
+                      "shrink-0 transition-all duration-300",
+                      done
+                        ? "text-emerald-400"
+                        : "text-muted-foreground/40 group-hover:text-muted-foreground/70"
+                    )}
+                  >
+                    {done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                  </span>
 
-                {/* Topic name */}
-                <span
-                  className={cn(
-                    "flex-1 text-sm transition-all duration-300",
-                    done
-                      ? "line-through text-muted-foreground/50"
-                      : "text-foreground/85 group-hover:text-foreground"
+                  {/* Topic name */}
+                  <span
+                    className={cn(
+                      "flex-1 text-sm transition-all duration-300",
+                      done
+                        ? "line-through text-muted-foreground/50"
+                        : "text-foreground/85 group-hover:text-foreground"
+                    )}
+                  >
+                    {topic}
+                  </span>
+
+                  {/* Stats */}
+                  {(stat?.totalMinutes || stat?.totalQuestions) ? (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {(stat?.totalMinutes ?? 0) > 0 && (
+                        <span className="flex items-center gap-1 text-[11px] font-medium text-cyan-400/80 bg-cyan-950/60 border border-cyan-500/20 rounded-md px-1.5 py-0.5">
+                          <Clock className="w-2.5 h-2.5" />
+                          {stat.totalMinutes >= 60
+                            ? `${Math.floor(stat.totalMinutes / 60)}s${stat.totalMinutes % 60 > 0 ? ` ${stat.totalMinutes % 60}d` : ""}`
+                            : `${stat.totalMinutes}d`}
+                        </span>
+                      )}
+                      {(stat?.totalQuestions ?? 0) > 0 && (
+                        <span className="flex items-center gap-1 text-[11px] font-medium text-violet-400/80 bg-violet-950/60 border border-violet-500/20 rounded-md px-1.5 py-0.5">
+                          <Hash className="w-2.5 h-2.5" />
+                          {stat.totalQuestions}
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
+                </button>
+
+                <div className="shrink-0 flex items-center gap-1.5">
+                  {taskInfo.total > 0 && (
+                    <span className="text-[10px] font-medium rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-300 px-1.5 py-0.5">
+                      Görev var ({taskInfo.pending}/{taskInfo.total})
+                    </span>
                   )}
-                >
-                  {topic}
-                </span>
-
-                {/* Stats */}
-                {(stat?.totalMinutes || stat?.totalQuestions) ? (
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {(stat?.totalMinutes ?? 0) > 0 && (
-                      <span className="flex items-center gap-1 text-[11px] font-medium text-cyan-400/80 bg-cyan-950/60 border border-cyan-500/20 rounded-md px-1.5 py-0.5">
-                        <Clock className="w-2.5 h-2.5" />
-                        {stat.totalMinutes >= 60
-                          ? `${Math.floor(stat.totalMinutes / 60)}s${stat.totalMinutes % 60 > 0 ? ` ${stat.totalMinutes % 60}d` : ""}`
-                          : `${stat.totalMinutes}d`}
-                      </span>
-                    )}
-                    {(stat?.totalQuestions ?? 0) > 0 && (
-                      <span className="flex items-center gap-1 text-[11px] font-medium text-violet-400/80 bg-violet-950/60 border border-violet-500/20 rounded-md px-1.5 py-0.5">
-                        <Hash className="w-2.5 h-2.5" />
-                        {stat.totalQuestions}
-                      </span>
-                    )}
-                  </div>
-                ) : null}
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => onQuickAdd(topic)}
+                    className="h-7 w-7 rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex items-center justify-center"
+                    title="Bu konu için görev ekle"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -380,16 +426,155 @@ function SummaryBanner({ total, completed }: { total: number; completed: number 
   );
 }
 
+interface QuickAddTaskDialogProps {
+  open: boolean;
+  onClose: () => void;
+  subject: Subject | null;
+  topic: string | null;
+  taskInfo: TopicTaskInfo;
+  onSubmit: (payload: {
+    date: string;
+    targetQuestions?: number;
+    targetMinutes?: number;
+  }) => Promise<void>;
+}
+
+function QuickAddTaskDialog({
+  open,
+  onClose,
+  subject,
+  topic,
+  taskInfo,
+  onSubmit,
+}: QuickAddTaskDialogProps) {
+  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [targetQuestions, setTargetQuestions] = useState("");
+  const [targetMinutes, setTargetMinutes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setDate(format(new Date(), "yyyy-MM-dd"));
+    setTargetQuestions("");
+    setTargetMinutes("");
+  }, [open]);
+
+  async function handleSubmit() {
+    if (!subject || !topic) return;
+    setSaving(true);
+    try {
+      await onSubmit({
+        date,
+        ...(targetQuestions ? { targetQuestions: Number(targetQuestions) } : {}),
+        ...(targetMinutes ? { targetMinutes: Number(targetMinutes) } : {}),
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md w-[calc(100vw-2rem)] rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-primary" />
+            Konudan Hızlı Görev Ekle
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5 text-sm">
+            <p className="font-medium">{subject?.label}</p>
+            <p className="text-muted-foreground">{topic}</p>
+          </div>
+
+          {taskInfo.total > 0 && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+              Bu konuda {taskInfo.total} görev var ({taskInfo.pending} bekleyen, {taskInfo.done} tamamlandı).
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label>Tarih</Label>
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Hedef Soru (opsiyonel)</Label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="örn. 40"
+                value={targetQuestions}
+                onChange={(e) => setTargetQuestions(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Hedef Süre (dk)</Label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="örn. 60"
+                value={targetMinutes}
+                onChange={(e) => setTargetMinutes(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" className="flex-1" onClick={onClose} disabled={saving}>
+              İptal
+            </Button>
+            <Button className="flex-1" onClick={handleSubmit} disabled={saving || !date}>
+              {saving ? "Ekleniyor..." : "Görev Ekle"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function TopicTree() {
   const [activeTab, setActiveTab] = useState<ExamType>("tyt");
   const [openSubjectId, setOpenSubjectId] = useState<string | null>(null);
+  const [quickAddTopic, setQuickAddTopic] = useState<string | null>(null);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
 
   const { user } = useAuth();
   const { loading, toggleTopic, isCompleted, getSubjectCompletedCount, getTotalStats } =
     useTopicProgress();
   const { logs } = useStudyLogs(user?.uid ?? null);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setScheduleItems([]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const all = await getAllScheduleItems(user.uid);
+        if (!cancelled) setScheduleItems(all);
+      } catch {
+        if (!cancelled) toast.error("Görevler yüklenemedi.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
 
   const filteredSubjects = useMemo(
     () => SUBJECTS.filter((s) => s.type === activeTab),
@@ -420,6 +605,71 @@ export default function TopicTree() {
     }
     return result;
   }, [openSubject, logs]);
+
+  const topicTaskInfoMap = useMemo<Record<string, TopicTaskInfo>>(() => {
+    if (!openSubject) return {};
+
+    const result: Record<string, TopicTaskInfo> = {};
+    for (const item of scheduleItems) {
+      if (item.subject !== openSubject.id || !item.topic) continue;
+      if (!result[item.topic]) result[item.topic] = { total: 0, pending: 0, done: 0 };
+      result[item.topic].total += 1;
+      if (item.status === "done") result[item.topic].done += 1;
+      else result[item.topic].pending += 1;
+    }
+
+    return result;
+  }, [openSubject, scheduleItems]);
+
+  const quickAddTaskInfo = useMemo<TopicTaskInfo>(
+    () => (quickAddTopic ? topicTaskInfoMap[quickAddTopic] ?? { total: 0, pending: 0, done: 0 } : { total: 0, pending: 0, done: 0 }),
+    [quickAddTopic, topicTaskInfoMap]
+  );
+
+  async function handleQuickAdd(payload: {
+    date: string;
+    targetQuestions?: number;
+    targetMinutes?: number;
+  }) {
+    if (!user?.uid || !openSubject || !quickAddTopic) return;
+
+    try {
+      const weekStart = format(
+        startOfWeek(parseISO(payload.date), { weekStartsOn: 1 }),
+        "yyyy-MM-dd"
+      );
+
+      const id = await addScheduleItem(user.uid, {
+        subject: openSubject.id,
+        topic: quickAddTopic,
+        date: payload.date,
+        weekStart,
+        status: "pending",
+        ...(payload.targetQuestions ? { targetQuestions: payload.targetQuestions } : {}),
+        ...(payload.targetMinutes ? { targetMinutes: payload.targetMinutes } : {}),
+      });
+
+      setScheduleItems((prev) => [
+        {
+          id,
+          uid: user.uid,
+          subject: openSubject.id,
+          topic: quickAddTopic,
+          date: payload.date,
+          weekStart,
+          status: "pending",
+          ...(payload.targetQuestions ? { targetQuestions: payload.targetQuestions } : {}),
+          ...(payload.targetMinutes ? { targetMinutes: payload.targetMinutes } : {}),
+        },
+        ...prev,
+      ]);
+
+      toast.success("Konu için görev eklendi.");
+    } catch {
+      toast.error("Görev eklenemedi.");
+      throw new Error("quick-add-failed");
+    }
+  }
 
   // Lock body scroll when panel is open
   useEffect(() => {
@@ -501,8 +751,19 @@ export default function TopicTree() {
         onClose={() => setOpenSubjectId(null)}
         topicStats={topicStats}
         onToggle={(topic) => openSubject && toggleTopic(openSubject.id, topic)}
+        onQuickAdd={(topic) => setQuickAddTopic(topic)}
         isCompleted={(topic) => (openSubject ? isCompleted(openSubject.id, topic) : false)}
+        getTaskInfo={(topic) => topicTaskInfoMap[topic] ?? { total: 0, pending: 0, done: 0 }}
         completedCount={openSubject ? getSubjectCompletedCount(openSubject.id) : 0}
+      />
+
+      <QuickAddTaskDialog
+        open={!!quickAddTopic && !!openSubject}
+        onClose={() => setQuickAddTopic(null)}
+        subject={openSubject}
+        topic={quickAddTopic}
+        taskInfo={quickAddTaskInfo}
+        onSubmit={handleQuickAdd}
       />
     </div>
   );
