@@ -71,7 +71,7 @@ export default function RootLayout({
               background:
                 "radial-gradient(circle, oklch(0.60 0.12 265 / 0.10) 0%, transparent 70%)",
               filter: "blur(60px)",
-              ["--glow-duration" as string]: "8s",
+              animationDuration: "8s, 4s",
             }}
           />
           {/* Orb 2 — bottom right */}
@@ -86,7 +86,7 @@ export default function RootLayout({
                 "radial-gradient(circle, oklch(0.58 0.10 230 / 0.08) 0%, transparent 70%)",
               filter: "blur(80px)",
               animationDelay: "3.6s",
-              ["--glow-duration" as string]: "12s",
+              animationDuration: "12s, 4s",
             }}
           />
           {/* Orb 3 — bottom left */}
@@ -101,7 +101,7 @@ export default function RootLayout({
                 "radial-gradient(circle, oklch(0.62 0.14 280 / 0.07) 0%, transparent 70%)",
               filter: "blur(55px)",
               animationDelay: "1.8s",
-              ["--glow-duration" as string]: "10s",
+              animationDuration: "10s, 4s",
             }}
           />
           {/* Orb 4 — top right */}
@@ -116,7 +116,7 @@ export default function RootLayout({
                 "radial-gradient(circle, oklch(0.60 0.15 270 / 0.09) 0%, transparent 70%)",
               filter: "blur(55px)",
               animationDelay: "5.4s",
-              ["--glow-duration" as string]: "9s",
+              animationDuration: "9s, 4s",
             }}
           />
           {/* Orb 5 — center right */}
@@ -131,7 +131,7 @@ export default function RootLayout({
                 "radial-gradient(circle, oklch(0.58 0.13 255 / 0.06) 0%, transparent 70%)",
               filter: "blur(65px)",
               animationDelay: "7.2s",
-              ["--glow-duration" as string]: "11s",
+              animationDuration: "11s, 4s",
             }}
           />
           {/* Orb 6 — center left */}
@@ -146,7 +146,7 @@ export default function RootLayout({
                 "radial-gradient(circle, oklch(0.60 0.11 240 / 0.07) 0%, transparent 70%)",
               filter: "blur(48px)",
               animationDelay: "2.7s",
-              ["--glow-duration" as string]: "14s",
+              animationDuration: "14s, 4s",
             }}
           />
         </div>

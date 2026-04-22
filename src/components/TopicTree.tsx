@@ -1,10 +1,23 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { CheckCircle2, Circle, Network, ChevronDown, ChevronRight, Trophy, Flame } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import {
+  CheckCircle2,
+  Circle,
+  Network,
+  ChevronRight,
+  Trophy,
+  Flame,
+  X,
+  Clock,
+  Hash,
+  BookOpen,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SUBJECTS } from "@/lib/subjects";
+import { SUBJECTS, type Subject } from "@/lib/subjects";
 import { useTopicProgress } from "@/hooks/useTopicProgress";
+import { useStudyLogs } from "@/hooks/useStudyLogs";
+import { useAuth } from "@/hooks/useAuth";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,90 +41,38 @@ function hexToHue(hex: string): number {
   return Math.round(h * 360);
 }
 
-// ─── Sub-components ────────────────────────────────────────────────────────────
+// ─── Topic stat type ───────────────────────────────────────────────────────────
 
-interface TopicRowProps {
-  topic: string;
-  completed: boolean;
-  onToggle: () => void;
-  delay: number;
+interface TopicStat {
+  totalMinutes: number;
+  totalQuestions: number;
+  sessions: number;
 }
 
-function TopicRow({ topic, completed, onToggle, delay }: TopicRowProps) {
-  return (
-    <button
-      onClick={onToggle}
-      className={cn(
-        "group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm",
-        "transition-all duration-200 hover:bg-white/6 active:scale-[0.99]",
-        "animate-fade-in-up",
-      )}
-      style={{ animationDelay: `${delay}s`, animationFillMode: "both" }}
-    >
-      <span
-        className={cn(
-          "shrink-0 transition-all duration-300",
-          completed ? "text-emerald-400" : "text-muted-foreground/40 group-hover:text-muted-foreground/70"
-        )}
-      >
-        {completed ? (
-          <CheckCircle2 className="w-4 h-4" />
-        ) : (
-          <Circle className="w-4 h-4" />
-        )}
-      </span>
-      <span
-        className={cn(
-          "transition-all duration-300 flex-1",
-          completed
-            ? "line-through text-muted-foreground/50"
-            : "text-foreground/85 group-hover:text-foreground"
-        )}
-      >
-        {topic}
-      </span>
-      {completed && (
-        <span className="shrink-0 text-[10px] font-semibold tracking-wider text-emerald-500/70 uppercase">
-          ✓
-        </span>
-      )}
-    </button>
-  );
-}
+// ─── Subject Card (grid tile — click to open panel) ────────────────────────────
 
 interface SubjectCardProps {
-  subjectId: string;
-  label: string;
-  color: string;
-  topics: string[];
+  subject: Subject;
   completedCount: number;
-  onToggle: (topic: string) => void;
-  isCompleted: (topic: string) => boolean;
+  onClick: () => void;
 }
 
-function SubjectCard({
-  subjectId,
-  label,
-  color,
-  topics,
-  completedCount,
-  onToggle,
-  isCompleted,
-}: SubjectCardProps) {
-  const [open, setOpen] = useState(false);
+function SubjectCard({ subject, completedCount, onClick }: SubjectCardProps) {
+  const { color, topics, label } = subject;
   const progress = topics.length > 0 ? completedCount / topics.length : 0;
   const hue = hexToHue(color);
   const allDone = completedCount === topics.length;
 
   return (
-    <div
+    <button
+      onClick={onClick}
       className={cn(
-        "glass-card rounded-2xl overflow-hidden transition-all duration-300",
-        "hover:border-white/12",
+        "glass-card rounded-2xl overflow-hidden text-left w-full",
+        "transition-all duration-300 hover:border-white/16 hover:scale-[1.015] active:scale-[0.99]",
         allDone && "ring-1 ring-emerald-500/25"
       )}
     >
-      {/* ─── Colored top accent bar ─────────────────────────────── */}
+      {/* Color accent bar */}
       <div
         className="h-[3px] w-full transition-all duration-500"
         style={{
@@ -119,24 +80,12 @@ function SubjectCard({
         }}
       />
 
-      {/* ─── Card header ─────────────────────────────────────────── */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="group flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-white/4 transition-colors"
-      >
-        {/* Color dot */}
+      <div className="flex items-center gap-3 px-4 py-3.5">
         <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_8px_var(--dot-glow)]"
-          style={{
-            background: color,
-            "--dot-glow": `${color}80`,
-          } as React.CSSProperties}
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ background: color, boxShadow: `0 0 8px ${color}80` }}
         />
-
-        {/* Label */}
         <span className="flex-1 text-sm font-semibold">{label}</span>
-
-        {/* Progress chip */}
         <span
           className={cn(
             "text-xs font-mono font-semibold px-2 py-0.5 rounded-full border",
@@ -147,70 +96,273 @@ function SubjectCard({
         >
           {completedCount}/{topics.length}
         </span>
+        <ChevronRight className="w-4 h-4 text-muted-foreground/50" />
+      </div>
 
-        {/* Chevron */}
-        <span className={cn("text-muted-foreground/50 transition-transform duration-200", open && "rotate-90")}>
-          <ChevronRight className="w-4 h-4" />
-        </span>
-      </button>
-
-      {/* ─── Thin progress bar ───────────────────────────────────── */}
+      {/* Progress bar */}
       <div className="mx-4 mb-3 h-1.5 rounded-full bg-white/6 overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-700 ease-out"
           style={{
             width: `${Math.round(progress * 100)}%`,
-            background: allDone
-              ? "oklch(0.65 0.15 155)"
-              : `oklch(0.65 0.18 ${hue})`,
+            background: allDone ? "oklch(0.65 0.15 155)" : `oklch(0.65 0.18 ${hue})`,
           }}
         />
       </div>
+    </button>
+  );
+}
 
-      {/* ─── Topic list ──────────────────────────────────────────── */}
-      {open && (
-        <div className="px-2 pb-3 border-t border-white/6 pt-2 space-y-0.5">
-          {topics.map((topic, i) => (
-            <TopicRow
-              key={topic}
-              topic={topic}
-              completed={isCompleted(topic)}
-              onToggle={() => onToggle(topic)}
-              delay={i * 0.025}
-            />
-          ))}
+// ─── Subject Panel (slide-in from right) ───────────────────────────────────────
+
+interface SubjectPanelProps {
+  subject: Subject | null;
+  onClose: () => void;
+  topicStats: Record<string, TopicStat>;
+  onToggle: (topic: string) => void;
+  isCompleted: (topic: string) => boolean;
+  completedCount: number;
+}
+
+function SubjectPanel({
+  subject,
+  onClose,
+  topicStats,
+  onToggle,
+  isCompleted,
+  completedCount,
+}: SubjectPanelProps) {
+  // displaySubject persists while closing animation plays
+  const [displaySubject, setDisplaySubject] = useState<Subject | null>(subject);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (subject) {
+      setDisplaySubject(subject);
+      // Double-frame to allow mount before triggering CSS transition
+      const id = requestAnimationFrame(() =>
+        requestAnimationFrame(() => setVisible(true))
+      );
+      return () => cancelAnimationFrame(id);
+    } else {
+      setVisible(false);
+      const t = setTimeout(() => setDisplaySubject(null), 440);
+      return () => clearTimeout(t);
+    }
+  }, [subject]);
+
+  // Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  if (!displaySubject) return null;
+
+  const { color, topics, label } = displaySubject;
+  const progress = topics.length > 0 ? completedCount / topics.length : 0;
+  const hue = hexToHue(color);
+  const allDone = completedCount === topics.length;
+
+  const totalSubjectMinutes = topics.reduce(
+    (s, t) => s + (topicStats[t]?.totalMinutes ?? 0),
+    0
+  );
+  const totalSubjectQuestions = topics.reduce(
+    (s, t) => s + (topicStats[t]?.totalQuestions ?? 0),
+    0
+  );
+
+  return (
+    <>
+      {/* Dim backdrop */}
+      <div
+        className="fixed inset-0 z-40 transition-all duration-[400ms]"
+        style={{
+          backgroundColor: visible ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0)",
+          backdropFilter: visible ? "blur(4px)" : "blur(0px)",
+        }}
+        onClick={onClose}
+      />
+
+      {/* Slide-in panel */}
+      <div
+        className="fixed top-0 right-0 bottom-0 z-50 flex flex-col w-full sm:w-[520px] lg:w-[580px]"
+        style={{
+          background:
+            "linear-gradient(160deg, oklch(0.17 0.022 265) 0%, oklch(0.14 0.015 265) 100%)",
+          borderLeft: "1px solid oklch(1 0 0 / 0.08)",
+          boxShadow: "-32px 0 80px rgba(0,0,0,0.5)",
+          transform: visible ? "translateX(0)" : "translateX(100%)",
+          transition: "transform 430ms cubic-bezier(0.32, 0.72, 0, 1)",
+        }}
+      >
+        {/* Subject color top bar */}
+        <div
+          className="h-1 w-full shrink-0 transition-all duration-700"
+          style={{
+            background: `linear-gradient(90deg, ${color}dd ${Math.round(progress * 100)}%, ${color}22 ${Math.round(progress * 100)}%)`,
+          }}
+        />
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 py-5 border-b border-white/8 shrink-0">
+          <span
+            className="h-3 w-3 shrink-0 rounded-full"
+            style={{ background: color, boxShadow: `0 0 12px ${color}99` }}
+          />
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-bold tracking-tight">{label}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {completedCount}/{topics.length} konu tamamlandı
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/8 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
-      )}
-    </div>
+
+        {/* Summary chips */}
+        <div className="flex flex-wrap gap-2 px-6 py-4 shrink-0 border-b border-white/6">
+          <div className="flex items-center gap-1.5 rounded-lg bg-white/6 border border-white/8 px-3 py-2">
+            <BookOpen className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-semibold tabular-nums">%{Math.round(progress * 100)}</span>
+            <span className="text-xs text-muted-foreground">tamamlandı</span>
+          </div>
+          {totalSubjectMinutes > 0 && (
+            <div className="flex items-center gap-1.5 rounded-lg bg-white/6 border border-white/8 px-3 py-2">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-xs font-semibold tabular-nums text-cyan-400">
+                {totalSubjectMinutes >= 60
+                  ? `${Math.floor(totalSubjectMinutes / 60)}s ${totalSubjectMinutes % 60}d`
+                  : `${totalSubjectMinutes}d`}
+              </span>
+              <span className="text-xs text-muted-foreground">toplam</span>
+            </div>
+          )}
+          {totalSubjectQuestions > 0 && (
+            <div className="flex items-center gap-1.5 rounded-lg bg-white/6 border border-white/8 px-3 py-2">
+              <Hash className="w-3.5 h-3.5 text-violet-400" />
+              <span className="text-xs font-semibold tabular-nums text-violet-400">
+                {totalSubjectQuestions}
+              </span>
+              <span className="text-xs text-muted-foreground">soru</span>
+            </div>
+          )}
+        </div>
+
+        {/* Progress bar */}
+        <div className="px-6 py-3 shrink-0 border-b border-white/6">
+          <div className="h-2 rounded-full bg-white/8 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700 ease-out"
+              style={{
+                width: `${Math.round(progress * 100)}%`,
+                background: allDone ? "oklch(0.65 0.15 155)" : `oklch(0.65 0.18 ${hue})`,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Topic list */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
+          {topics.map((topic, i) => {
+            const stat = topicStats[topic];
+            const done = isCompleted(topic);
+            return (
+              <button
+                key={topic}
+                onClick={() => onToggle(topic)}
+                className={cn(
+                  "group w-full flex items-center gap-3 rounded-xl px-4 py-3 text-left",
+                  "transition-all duration-200 hover:bg-white/6 active:scale-[0.99]",
+                  "animate-fade-in-up border",
+                  done
+                    ? "border-emerald-500/15 bg-emerald-500/5"
+                    : "border-transparent hover:border-white/8"
+                )}
+                style={{ animationDelay: `${i * 0.025}s`, animationFillMode: "both" }}
+              >
+                {/* Completion icon */}
+                <span
+                  className={cn(
+                    "shrink-0 transition-all duration-300",
+                    done
+                      ? "text-emerald-400"
+                      : "text-muted-foreground/40 group-hover:text-muted-foreground/70"
+                  )}
+                >
+                  {done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                </span>
+
+                {/* Topic name */}
+                <span
+                  className={cn(
+                    "flex-1 text-sm transition-all duration-300",
+                    done
+                      ? "line-through text-muted-foreground/50"
+                      : "text-foreground/85 group-hover:text-foreground"
+                  )}
+                >
+                  {topic}
+                </span>
+
+                {/* Stats */}
+                {(stat?.totalMinutes || stat?.totalQuestions) ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(stat?.totalMinutes ?? 0) > 0 && (
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-cyan-400/80 bg-cyan-950/60 border border-cyan-500/20 rounded-md px-1.5 py-0.5">
+                        <Clock className="w-2.5 h-2.5" />
+                        {stat.totalMinutes >= 60
+                          ? `${Math.floor(stat.totalMinutes / 60)}s${stat.totalMinutes % 60 > 0 ? ` ${stat.totalMinutes % 60}d` : ""}`
+                          : `${stat.totalMinutes}d`}
+                      </span>
+                    )}
+                    {(stat?.totalQuestions ?? 0) > 0 && (
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-violet-400/80 bg-violet-950/60 border border-violet-500/20 rounded-md px-1.5 py-0.5">
+                        <Hash className="w-2.5 h-2.5" />
+                        {stat.totalQuestions}
+                      </span>
+                    )}
+                  </div>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* All done footer */}
+        {allDone && (
+          <div className="px-6 py-4 border-t border-white/6 shrink-0 flex items-center gap-2 justify-center text-emerald-400">
+            <Flame className="w-4 h-4" />
+            <span className="text-sm font-semibold">Tüm konular tamamlandı!</span>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
 // ─── Summary Banner ────────────────────────────────────────────────────────────
 
-function SummaryBanner({
-  total,
-  completed,
-}: {
-  total: number;
-  completed: number;
-}) {
+function SummaryBanner({ total, completed }: { total: number; completed: number }) {
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   return (
     <div className="glass-card rounded-2xl px-6 py-5 flex items-center gap-5 animate-fade-in-up">
-      {/* Icon */}
       <div className="shrink-0 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/12 border border-primary/20">
         <Trophy className="w-6 h-6 text-primary" />
       </div>
-
-      {/* Stats */}
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 mb-1.5">
           <span className="text-2xl font-bold tabular-nums">{completed}</span>
           <span className="text-muted-foreground text-sm">/ {total} konu tamamlandı</span>
           <span className="ml-auto text-sm font-semibold text-primary">%{percent}</span>
         </div>
-        {/* Progress bar */}
         <div className="h-2 rounded-full bg-white/8 overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-700 ease-out bg-primary"
@@ -218,8 +370,6 @@ function SummaryBanner({
           />
         </div>
       </div>
-
-      {/* Streak flame if all done */}
       {percent === 100 && (
         <div className="shrink-0 flex items-center gap-1.5 text-amber-400">
           <Flame className="w-5 h-5" />
@@ -234,8 +384,12 @@ function SummaryBanner({
 
 export default function TopicTree() {
   const [activeTab, setActiveTab] = useState<ExamType>("tyt");
+  const [openSubjectId, setOpenSubjectId] = useState<string | null>(null);
+
+  const { user } = useAuth();
   const { loading, toggleTopic, isCompleted, getSubjectCompletedCount, getTotalStats } =
     useTopicProgress();
+  const { logs } = useStudyLogs(user?.uid ?? null);
 
   const filteredSubjects = useMemo(
     () => SUBJECTS.filter((s) => s.type === activeTab),
@@ -247,10 +401,34 @@ export default function TopicTree() {
     [filteredSubjects, getTotalStats]
   );
 
+  const openSubject = useMemo(
+    () => SUBJECTS.find((s) => s.id === openSubjectId) ?? null,
+    [openSubjectId]
+  );
+
+  // Per-topic stats for the open subject, aggregated from study logs
+  const topicStats = useMemo<Record<string, TopicStat>>(() => {
+    if (!openSubject || !logs.length) return {};
+    const result: Record<string, TopicStat> = {};
+    for (const log of logs) {
+      if (log.subject !== openSubject.id) continue;
+      const key = log.topic;
+      if (!result[key]) result[key] = { totalMinutes: 0, totalQuestions: 0, sessions: 0 };
+      result[key].totalMinutes += log.durationMinutes ?? 0;
+      result[key].totalQuestions += log.questionCount ?? 0;
+      result[key].sessions += 1;
+    }
+    return result;
+  }, [openSubject, logs]);
+
+  // Lock body scroll when panel is open
+  useEffect(() => {
+    document.body.style.overflow = openSubjectId ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [openSubjectId]);
+
   return (
     <div className="relative min-h-[calc(100vh-3.5rem)]">
-
-
       <main className="relative z-10 max-w-5xl mx-auto px-4 pt-10 pb-24 space-y-6">
         {/* ─── Page header ─────────────────────────────────────── */}
         <div className="text-center space-y-2 animate-fade-in-up">
@@ -308,18 +486,24 @@ export default function TopicTree() {
             {filteredSubjects.map((subject) => (
               <SubjectCard
                 key={subject.id}
-                subjectId={subject.id}
-                label={subject.label}
-                color={subject.color}
-                topics={subject.topics}
+                subject={subject}
                 completedCount={getSubjectCompletedCount(subject.id)}
-                onToggle={(topic) => toggleTopic(subject.id, topic)}
-                isCompleted={(topic) => isCompleted(subject.id, topic)}
+                onClick={() => setOpenSubjectId(subject.id)}
               />
             ))}
           </div>
         )}
       </main>
+
+      {/* ─── Slide-in subject detail panel ───────────────────── */}
+      <SubjectPanel
+        subject={openSubject}
+        onClose={() => setOpenSubjectId(null)}
+        topicStats={topicStats}
+        onToggle={(topic) => openSubject && toggleTopic(openSubject.id, topic)}
+        isCompleted={(topic) => (openSubject ? isCompleted(openSubject.id, topic) : false)}
+        completedCount={openSubject ? getSubjectCompletedCount(openSubject.id) : 0}
+      />
     </div>
   );
 }
