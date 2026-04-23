@@ -586,7 +586,7 @@ export default function FocusTimer() {
               examType: selectedBranch.startsWith("ayt_") ? "ayt" : "tyt",
               examCategory: "brans",
               date: format(new Date(), "yyyy-MM-dd"),
-              subject: BRANCH_TIMINGS[selectedBranch].label,
+              subject: selectedBranch,
               net,
               durationMinutes,
               notes,
