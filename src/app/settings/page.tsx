@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { User, Lock, Bell } from "lucide-react";
+import { User, Lock, Bell, Monitor, Copy, Check, RefreshCw } from "lucide-react";
 import { requestNotificationPermission } from "@/lib/notifications";
 
 function PrivacyToggle({
@@ -48,6 +48,10 @@ export default function SettingsPage() {
     }
   );
   const [saving, setSaving] = useState(false);
+  const [desktopToken, setDesktopToken] = useState("");
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState(false);
+  const [tokenGeneratedAt, setTokenGeneratedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -182,6 +186,79 @@ export default function SettingsPage() {
                   İzin Ver
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Desktop Integration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Monitor className="w-4 h-4" /> Masaüstü Entegrasyonu
+              </CardTitle>
+              <CardDescription>
+                Dinamik Ada masaüstü uygulaması için geçici bağlantı token'ı oluştur. Token 1 saat geçerlidir.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={tokenLoading}
+                onClick={async () => {
+                  setTokenLoading(true);
+                  try {
+                    const res = await fetch("/api/auth/token", { method: "POST" });
+                    if (!res.ok) throw new Error("Token oluşturulamadı.");
+                    const data = await res.json();
+                    setDesktopToken(data.token);
+                    setTokenGeneratedAt(new Date());
+                    setTokenCopied(false);
+                  } catch {
+                    toast.error("Token oluşturulamadı.");
+                  } finally {
+                    setTokenLoading(false);
+                  }
+                }}
+              >
+                {tokenLoading ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                {desktopToken ? "Yeni Token Oluştur" : "Token Oluştur"}
+              </Button>
+
+              {desktopToken && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs bg-muted/60 border border-border rounded px-3 py-2 break-all font-mono select-all">
+                      {desktopToken}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(desktopToken);
+                        setTokenCopied(true);
+                        setTimeout(() => setTokenCopied(false), 2000);
+                      }}
+                    >
+                      {tokenCopied ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                  {tokenGeneratedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Oluşturuldu:{" "}
+                      {tokenGeneratedAt.toLocaleTimeString("tr-TR")}{" — "}1 saat geçerli.
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
