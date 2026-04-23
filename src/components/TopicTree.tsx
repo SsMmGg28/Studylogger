@@ -21,7 +21,7 @@ import { SUBJECTS, type Subject } from "@/lib/subjects";
 import { useTopicProgress } from "@/hooks/useTopicProgress";
 import { useStudyLogs } from "@/hooks/useStudyLogs";
 import { useAuth } from "@/hooks/useAuth";
-import { addScheduleItem, getAllScheduleItems, type ScheduleItem } from "@/lib/db";
+import { addScheduleItem, getAllScheduleItems, getUserExamLogs, type ScheduleItem, type ExamLog } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,10 +74,11 @@ interface TopicTaskInfo {
 interface SubjectCardProps {
   subject: Subject;
   completedCount: number;
+  examCount: number;
   onClick: () => void;
 }
 
-function SubjectCard({ subject, completedCount, onClick }: SubjectCardProps) {
+function SubjectCard({ subject, completedCount, examCount, onClick }: SubjectCardProps) {
   const { color, topics, label } = subject;
   const progress = topics.length > 0 ? completedCount / topics.length : 0;
   const hue = hexToHue(color);
@@ -106,6 +107,11 @@ function SubjectCard({ subject, completedCount, onClick }: SubjectCardProps) {
           style={{ background: color, boxShadow: `0 0 8px ${color}80` }}
         />
         <span className="flex-1 text-sm font-semibold">{label}</span>
+        {examCount > 0 && (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400">
+            {examCount} branş
+          </span>
+        )}
         <span
           className={cn(
             "text-xs font-mono font-semibold px-2 py-0.5 rounded-full border",
@@ -549,11 +555,19 @@ export default function TopicTree() {
   const [openSubjectId, setOpenSubjectId] = useState<string | null>(null);
   const [quickAddTopic, setQuickAddTopic] = useState<string | null>(null);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [examLogs, setExamLogs] = useState<ExamLog[]>([]);
 
   const { user } = useAuth();
   const { loading, toggleTopic, isCompleted, getSubjectCompletedCount, getTotalStats } =
     useTopicProgress();
   const { logs } = useStudyLogs(user?.uid ?? null);
+
+  useEffect(() => {
+    if (!user?.uid) { setExamLogs([]); return; }
+    let cancelled = false;
+    getUserExamLogs(user.uid).then((data) => { if (!cancelled) setExamLogs(data); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -580,6 +594,17 @@ export default function TopicTree() {
     () => SUBJECTS.filter((s) => s.type === activeTab),
     [activeTab]
   );
+
+  // Count branş denemesi per subject
+  const bransExamCountBySubject = useMemo<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const log of examLogs) {
+      if (log.examCategory === "brans" && log.subject) {
+        map[log.subject] = (map[log.subject] ?? 0) + 1;
+      }
+    }
+    return map;
+  }, [examLogs]);
 
   const { total, completed } = useMemo(
     () => getTotalStats(filteredSubjects),
@@ -738,6 +763,7 @@ export default function TopicTree() {
                 key={subject.id}
                 subject={subject}
                 completedCount={getSubjectCompletedCount(subject.id)}
+                examCount={bransExamCountBySubject[subject.id] ?? 0}
                 onClick={() => setOpenSubjectId(subject.id)}
               />
             ))}

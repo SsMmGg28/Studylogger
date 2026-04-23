@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import Link from "next/link";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -21,7 +21,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useStudyLogs } from "@/hooks/useStudyLogs";
 import { useGoals } from "@/hooks/useGoals";
-import { aggregateBySubject } from "@/lib/db";
+import { aggregateBySubject, getUserExamLogs, type ExamLog } from "@/lib/db";
+import { DEMO_UID } from "@/lib/demo-data";
 import { checkStudyReminder, checkStreakWarning, sendLocalNotification } from "@/lib/notifications";
 
 function StatCard({
@@ -55,6 +56,12 @@ export default function DashboardPage() {
   const { user, profile } = useAuth();
   const { logs, loading } = useStudyLogs(user?.uid ?? null);
   const { goals } = useGoals(user?.uid ?? null);
+  const [examLogs, setExamLogs] = useState<ExamLog[]>([]);
+
+  useEffect(() => {
+    if (!user?.uid || user.uid === DEMO_UID) return;
+    getUserExamLogs(user.uid).then(setExamLogs).catch(() => {});
+  }, [user?.uid]);
 
   const now = new Date();
   const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd");
@@ -89,6 +96,30 @@ export default function DashboardPage() {
   );
   const todayMins = todayLogs.reduce((s, l) => s + l.durationMinutes, 0);
   const todayQs = todayLogs.reduce((s, l) => s + l.questionCount, 0);
+
+  // Exam log contributions (branş denemesi süresi + net skoru)
+  function examNet(l: ExamLog) {
+    return l.examCategory === "brans" ? Math.round(l.net ?? 0) : Math.round(l.totalNet ?? 0);
+  }
+  const examWeekLogs = useMemo(
+    () => examLogs.filter((l) => l.date >= weekStart && l.date <= weekEnd),
+    [examLogs, weekStart, weekEnd]
+  );
+  const examMonthLogs = useMemo(
+    () => examLogs.filter((l) => l.date >= monthStart),
+    [examLogs, monthStart]
+  );
+  const examTodayLogs = useMemo(
+    () => examLogs.filter((l) => l.date === todayStr),
+    [examLogs, todayStr]
+  );
+  const examWeekMins = examWeekLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0);
+  const examMonthMins = examMonthLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0);
+  const examTotalMins = examLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0);
+  const examTodayMins = examTodayLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0);
+  const examWeekQs = examWeekLogs.reduce((s, l) => s + examNet(l), 0);
+  const examTotalQs = examLogs.reduce((s, l) => s + examNet(l), 0);
+  const examTodayQs = examTodayLogs.reduce((s, l) => s + examNet(l), 0);
 
   function fmtMins(m: number) {
     const h = Math.floor(m / 60);
@@ -164,26 +195,26 @@ export default function DashboardPage() {
                 <StatCard
                   icon={Clock}
                   label="Bugün"
-                  value={fmtMins(todayMins)}
-                  sub={`${todayQs} soru`}
+                  value={fmtMins(todayMins + examTodayMins)}
+                  sub={`${todayQs + examTodayQs} net/soru`}
                 />
                 <StatCard
                   icon={Clock}
                   label="Bu Hafta"
-                  value={fmtMins(weekMins)}
-                  sub={`${weekQs} soru · ${weekLogs.length} kayıt`}
+                  value={fmtMins(weekMins + examWeekMins)}
+                  sub={`${weekQs + examWeekQs} net/soru · ${weekLogs.length + examWeekLogs.length} kayıt`}
                 />
                 <StatCard
                   icon={TrendingUp}
                   label="Bu Ay"
-                  value={fmtMins(monthMins)}
-                  sub={`${monthLogs.length} kayıt`}
+                  value={fmtMins(monthMins + examMonthMins)}
+                  sub={`${monthLogs.length + examMonthLogs.length} kayıt`}
                 />
                 <StatCard
                   icon={BookOpen}
                   label="Toplam"
-                  value={fmtMins(totalMins)}
-                  sub={`${totalQs} soru · ${logs.length} kayıt`}
+                  value={fmtMins(totalMins + examTotalMins)}
+                  sub={`${totalQs + examTotalQs} net/soru · ${logs.length + examLogs.length} kayıt`}
                 />
               </div>
 
