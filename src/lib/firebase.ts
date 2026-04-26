@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, type Firestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -21,9 +21,13 @@ if (typeof window !== "undefined") {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     _auth = getAuth(app);
-    _db = initializeFirestore(app, {
-      localCache: persistentLocalCache(),
-    });
+    // Use persistent local cache so pending Firestore writes survive page refresh.
+    // Falls back to getFirestore if already initialized (e.g., hot-reload in dev).
+    try {
+      _db = initializeFirestore(app, { localCache: persistentLocalCache() });
+    } catch {
+      _db = getFirestore(app);
+    }
   } catch {
     // Firebase config missing or invalid — app runs in unauthenticated mode
   }
