@@ -52,6 +52,8 @@ export default function SettingsPage() {
   const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [tokenGeneratedAt, setTokenGeneratedAt] = useState<Date | null>(null);
+  const [showUid, setShowUid] = useState(false);
+  const [uidCopied, setUidCopied] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -196,7 +198,7 @@ export default function SettingsPage() {
                 <Monitor className="w-4 h-4" /> Masaüstü Entegrasyonu
               </CardTitle>
               <CardDescription>
-                Dinamik Ada masaüstü uygulaması için geçici bağlantı token'ı oluştur. Token 1 saat geçerlidir.
+                Dinamik Ada masaüstü uygulaması için bağlantı token'ı oluştur. Token&apos;ı kopyalayıp masaüstü uygulamasının Bağlan sekmesine yapıştır. UID otomatik algılanır.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -259,6 +261,48 @@ export default function SettingsPage() {
                   )}
                 </div>
               )}
+
+              {/* Kullanıcı ID — masaüstü uygulaması kurulumunda gereklidir */}
+              <div className="pt-2 border-t border-border/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Kullanıcı ID (UID)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Masaüstü uygulamasını kurarken bu değeri gir.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowUid((v) => !v)}
+                  >
+                    {showUid ? "Gizle" : "Göster"}
+                  </Button>
+                </div>
+                {showUid && user && (
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs bg-muted/60 border border-border rounded px-3 py-2 break-all font-mono select-all">
+                      {user.uid}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(user.uid);
+                        setUidCopied(true);
+                        setTimeout(() => setUidCopied(false), 2000);
+                      }}
+                    >
+                      {uidCopied ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 

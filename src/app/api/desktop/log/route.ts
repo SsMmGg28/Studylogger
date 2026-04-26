@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { adminDb, adminAuth } from "@/lib/firebase-admin";
 
-const DESKTOP_SECRET = process.env.DESKTOP_API_SECRET;
+async function verifyDesktopToken(req: NextRequest): Promise<string | null> {
+  if (!adminAuth) return null;
+  const authHeader = req.headers.get("authorization");
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) return null;
+  try {
+    const decoded = await adminAuth.verifyIdToken(token);
+    return decoded.uid;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-
-  if (!DESKTOP_SECRET || authHeader !== `Bearer ${DESKTOP_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const uid = await verifyDesktopToken(req);
+  if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   if (!adminDb) {
     return NextResponse.json({ error: "Firebase admin is not configured" }, { status: 500 });
@@ -16,9 +24,6 @@ export async function POST(req: NextRequest) {
 
   try {
     const payload = await req.json();
-
-    const uid = payload.uid;
-    if (!uid) return NextResponse.json({ error: "Missing UID" }, { status: 400 });
     
     // Default subject to "other" or assume the desktop app sends valid subject/topic IDs
     const subject = payload.subject || "diger";
