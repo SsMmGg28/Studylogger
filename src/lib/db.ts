@@ -14,6 +14,7 @@ import {
   writeBatch,
   arrayUnion,
   arrayRemove,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -418,4 +419,72 @@ export async function completeScheduleItem(
 
 export async function deleteScheduleItem(uid: string, itemId: string): Promise<void> {
   await deleteDoc(doc(db, "users", uid, "schedule", itemId));
+}
+
+// ─── Cloud Timer Sessions ─────────────────────────────────────────────────────
+// One document per user at timerSessions/{uid}.
+// The source of truth for the timer — survives screen off, tab close, page refresh.
+
+export interface TimerSession {
+  uid: string;
+  status: "running" | "paused";
+  branchKey: string;
+  /** Server timestamp of when the current run segment started. Null when paused. */
+  startedAt: Timestamp | null;
+  /** Total seconds accumulated across all previous run segments. */
+  accumulatedSeconds: number;
+  updatedAt: Timestamp;
+}
+
+/** Subscribe to the user's active timer session in real time. */
+export function subscribeTimerSession(
+  uid: string,
+  callback: (session: TimerSession | null) => void,
+  onError?: (error: Error) => void
+): () => void {
+  if (!db) return () => {};
+  const docRef = doc(db, "timerSessions", uid);
+  return onSnapshot(
+    docRef,
+    (snap) => {
+      callback(snap.exists() ? (snap.data() as TimerSession) : null);
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+}
+
+/** Start or resume the timer. Records server timestamp as the run-segment start. */
+export async function startTimer(
+  uid: string,
+  branchKey: string,
+  accumulatedSeconds: number
+): Promise<void> {
+  if (!db) return;
+  await setDoc(doc(db, "timerSessions", uid), {
+    uid,
+    branchKey,
+    status: "running",
+    startedAt: serverTimestamp(),
+    accumulatedSeconds,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Pause the timer, persisting the current elapsed seconds. */
+export async function pauseTimer(uid: string, accumulatedSeconds: number): Promise<void> {
+  if (!db) return;
+  await updateDoc(doc(db, "timerSessions", uid), {
+    status: "paused",
+    startedAt: null,
+    accumulatedSeconds,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Clear the timer session entirely (after reset or save). */
+export async function resetTimer(uid: string): Promise<void> {
+  if (!db) return;
+  await deleteDoc(doc(db, "timerSessions", uid));
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw, Timer, BookPlus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,14 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { addExamLog } from "@/lib/db";
+import {
+  addExamLog,
+  subscribeTimerSession,
+  startTimer,
+  pauseTimer,
+  resetTimer,
+  type TimerSession,
+} from "@/lib/db";
 import { DEMO_UID } from "@/lib/demo-data";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -53,7 +60,6 @@ const BRANCH_TIMINGS: Record<string, BranchTiming> = {
 
 type Phase = "focus" | "warning" | "danger";
 
-// Danger starts at 115% of ideal time — gives a 15% buffer past ideal where warning still shows
 const DANGER_THRESHOLD_RATIO = 1.15;
 
 function getDangerSeconds(timing: BranchTiming): number {
@@ -69,7 +75,6 @@ function getPhase(elapsed: number, timing: BranchTiming): Phase {
 function getPhaseProgress(elapsed: number, timing: BranchTiming): number {
   const dangerSeconds = getDangerSeconds(timing);
   if (elapsed >= dangerSeconds) {
-    // In danger zone: 0-1 maps to dangerSeconds..dangerSeconds*1.5
     return Math.min((elapsed - dangerSeconds) / (dangerSeconds * 0.5), 1);
   }
   if (elapsed >= timing.warningSeconds) {
@@ -78,7 +83,6 @@ function getPhaseProgress(elapsed: number, timing: BranchTiming): number {
   return elapsed / timing.warningSeconds;
 }
 
-// Phase color configs (hue in oklch)
 const PHASE_COLORS: Record<Phase, { hue: number; chroma: number; name: string }> = {
   focus:   { hue: 180, chroma: 0.15, name: "Odak Bölgesi" },
   warning: { hue: 55,  chroma: 0.18, name: "Uyarı Bölgesi" },
@@ -91,6 +95,15 @@ function formatTime(seconds: number): string {
   const s = seconds % 60;
   if (h > 0) return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
+/** Compute elapsed seconds from a TimerSession's timestamps. */
+function computeElapsed(session: TimerSession): number {
+  if (session.status === "running" && session.startedAt) {
+    const startMs = (session.startedAt as { toMillis(): number }).toMillis();
+    return session.accumulatedSeconds + Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+  }
+  return session.accumulatedSeconds;
 }
 
 // ─── Animated Glow Orb ─────────────────────────────────────────────────────
@@ -106,7 +119,6 @@ function GlowOrb({ phase, index, intensity }: GlowOrbProps) {
   const delay = index * 1.8;
   const duration = 6 + (index % 4) * 2;
 
-  // Position orbs around the screen
   const positions = [
     { top: "10%", left: "15%" },
     { top: "60%", right: "10%" },
@@ -179,7 +191,6 @@ function SaveLogDialog({ open, onClose, elapsedSeconds, branchKey, onSave }: Sav
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-          {/* Branch + duration summary */}
           <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-primary/8 border border-primary/20">
             <Timer className="w-4 h-4 text-primary shrink-0 mt-0.5" />
             <div className="space-y-0.5">
@@ -190,7 +201,6 @@ function SaveLogDialog({ open, onClose, elapsedSeconds, branchKey, onSave }: Sav
             </div>
           </div>
 
-          {/* Net score */}
           <div className="space-y-1.5">
             <Label htmlFor="net">
               Net <span className="text-muted-foreground text-xs">(opsiyonel)</span>
@@ -207,7 +217,6 @@ function SaveLogDialog({ open, onClose, elapsedSeconds, branchKey, onSave }: Sav
             />
           </div>
 
-          {/* Notes */}
           <div className="space-y-1.5">
             <Label>Not <span className="text-muted-foreground text-xs">(opsiyonel)</span></Label>
             <Textarea
@@ -259,41 +268,185 @@ function DevSpeedPanel({ speed, onSpeedChange }: { speed: number; onSpeedChange:
 // ─── Main Component ─────────────────────────────────────────────────────────
 export default function FocusTimer() {
   const { user } = useAuth();
+  const [cloudSyncUnavailable, setCloudSyncUnavailable] = useState(false);
 
-  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
+  // ── Demo / local-only mode (no Firestore) ─────────────────────────────────
+  // Used when user is not authenticated or is in demo mode.
+  const isDemoMode = !user || user.uid === DEMO_UID || cloudSyncUnavailable;
+
+  const [localBranch, setLocalBranch] = useState<string | null>(null);
+  const [localElapsed, setLocalElapsed] = useState(0);
+  const [localRunning, setLocalRunning] = useState(false);
+  const localIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Cloud timer state (authenticated users) ───────────────────────────────
+  // `session` is the Firestore doc. `pendingBranch` is the branch the user has
+  // selected but not yet started (no session exists yet).
+  const [session, setSession] = useState<TimerSession | null>(null);
+  const [pendingBranch, setPendingBranch] = useState<string | null>(null);
+  // Elapsed seconds computed from session timestamps, refreshed by a 1-second interval.
+  const [displayElapsed, setDisplayElapsed] = useState(0);
+
   const [showSave, setShowSave] = useState(false);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Optimistic start: track local start time so the timer counts immediately
+  // before the Firestore snapshot round-trip completes.
+  const [optimisticRunning, setOptimisticRunning] = useState(false);
+  const optimisticStartRef = useRef<{ startedAt: number; accumulated: number } | null>(null);
+  const permissionToastShownRef = useRef(false);
+
+  // ── Derived values ─────────────────────────────────────────────────────────
+  // Cloud: branch is locked to the active session; falls back to pending selection.
+  const selectedBranch = isDemoMode ? localBranch : (session?.branchKey ?? pendingBranch);
+  const isRunning = isDemoMode ? localRunning : (session?.status === "running" || optimisticRunning);
+  const elapsed = isDemoMode ? localElapsed : displayElapsed;
 
   const timing = selectedBranch ? BRANCH_TIMINGS[selectedBranch] : null;
   const phase: Phase = timing ? getPhase(elapsed, timing) : "focus";
   const intensity = timing ? getPhaseProgress(elapsed, timing) : 0;
 
-  const pause = useCallback(() => setIsRunning(false), []);
-
-  const reset = useCallback(() => { setIsRunning(false); setElapsed(0); }, []);
-
-  // Interval: fires every (1000 / speedMultiplier) ms real time, +1s per tick
+  // ── Subscribe to Firestore timer session (cloud mode only) ─────────────────
   useEffect(() => {
-    if (!isRunning) {
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (isDemoMode || !user) return;
+    const unsub = subscribeTimerSession(
+      user.uid,
+      setSession,
+      (error) => {
+        console.error("[FocusTimer] Timer session subscription failed:", error);
+        setSession(null);
+        setCloudSyncUnavailable(true);
+        if (!permissionToastShownRef.current) {
+          permissionToastShownRef.current = true;
+          toast.error("Bulut zamanlayiciya erisilemiyor. Yerel mod kullaniliyor.");
+        }
+      }
+    );
+    return unsub;
+  }, [isDemoMode, user]);
+
+  useEffect(() => {
+    if (!cloudSyncUnavailable || localBranch) return;
+    if (session?.branchKey) setLocalBranch(session.branchKey);
+    else if (pendingBranch) setLocalBranch(pendingBranch);
+    setLocalElapsed(displayElapsed);
+    setLocalRunning(session?.status === "running");
+  }, [cloudSyncUnavailable, localBranch, session, pendingBranch, displayElapsed]);
+
+  // When Firestore confirms the session is running, release optimistic state.
+  useEffect(() => {
+    if (optimisticRunning && session?.status === "running") {
+      setOptimisticRunning(false);
+      optimisticStartRef.current = null;
+    }
+  }, [optimisticRunning, session]);
+
+  // ── Recompute displayElapsed every second from session timestamps ──────────
+  // This is the key difference from the old client-only approach: elapsed is
+  // calculated from a wall-clock timestamp stored in Firestore, so screen-off
+  // or tab-suspend doesn't lose time.
+  useEffect(() => {
+    if (isDemoMode) return;
+
+    // Optimistic counting: use local start time until snapshot arrives.
+    if (optimisticRunning && optimisticStartRef.current) {
+      const opt = optimisticStartRef.current;
+      const compute = () => opt.accumulated + Math.floor((Date.now() - opt.startedAt) / 1000);
+      setDisplayElapsed(compute());
+      const id = setInterval(() => setDisplayElapsed(compute()), 1000);
+      return () => clearInterval(id);
+    }
+
+    if (!session) {
+      setDisplayElapsed(0);
+      return;
+    }
+
+    const compute = () => computeElapsed(session);
+    setDisplayElapsed(compute());
+
+    if (session.status !== "running") return;
+
+    const id = setInterval(() => setDisplayElapsed(compute()), 1000);
+    return () => clearInterval(id);
+  }, [session, isDemoMode, optimisticRunning]);
+
+  // ── Demo mode: local interval ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!isDemoMode) return;
+    if (!localRunning) {
+      if (localIntervalRef.current) { clearInterval(localIntervalRef.current); localIntervalRef.current = null; }
       return;
     }
     const intervalMs = IS_DEV ? Math.max(50, Math.round(1000 / speedMultiplier)) : 1000;
-    intervalRef.current = setInterval(() => setElapsed((p) => p + 1), intervalMs);
-    return () => { if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; } };
-  }, [isRunning, speedMultiplier]);
+    localIntervalRef.current = setInterval(() => setLocalElapsed((p) => p + 1), intervalMs);
+    return () => { if (localIntervalRef.current) { clearInterval(localIntervalRef.current); localIntervalRef.current = null; } };
+  }, [isDemoMode, localRunning, speedMultiplier]);
 
-  // Phase label & remaining info
+  // ── Timer actions ─────────────────────────────────────────────────────────
+
+  function handleBranchSelect(value: string) {
+    if (isDemoMode) {
+      setLocalBranch(value);
+      setLocalRunning(false);
+      setLocalElapsed(0);
+    } else {
+      setPendingBranch(value);
+      setDisplayElapsed(0);
+      // Clear any existing session when switching branch
+      if (session && user) resetTimer(user.uid);
+    }
+  }
+
+  async function handleStart() {
+    if (isDemoMode) {
+      setLocalRunning(true);
+      return;
+    }
+    const branch = selectedBranch;
+    if (!branch || !user) return;
+    // Start counting immediately — don't wait for Firestore round-trip.
+    optimisticStartRef.current = { startedAt: Date.now(), accumulated: displayElapsed };
+    setOptimisticRunning(true);
+    try {
+      await startTimer(user.uid, branch, displayElapsed);
+      // session snapshot will arrive and seamlessly replace optimistic state.
+    } catch {
+      optimisticStartRef.current = null;
+      setOptimisticRunning(false);
+      toast.error("Zamanlayici baslatilamadi. Lutfen tekrar deneyin.");
+    }
+  }
+
+  async function handlePause() {
+    if (isDemoMode) {
+      setLocalRunning(false);
+      return;
+    }
+    if (!user || !session) return;
+    optimisticStartRef.current = null;
+    setOptimisticRunning(false);
+    await pauseTimer(user.uid, displayElapsed);
+  }
+
+  async function handleReset() {
+    if (isDemoMode) {
+      setLocalRunning(false);
+      setLocalElapsed(0);
+      return;
+    }
+    optimisticStartRef.current = null;
+    setOptimisticRunning(false);
+    setDisplayElapsed(0);
+    setPendingBranch(null);
+    if (user && session) await resetTimer(user.uid);
+  }
+
+  // ── Derived display values ─────────────────────────────────────────────────
   const phaseColor = PHASE_COLORS[phase];
   const dangerSeconds = timing ? getDangerSeconds(timing) : 0;
   const remaining = timing ? Math.max(0, timing.idealSeconds - elapsed) : 0;
-  // overtime shown once past ideal, but color follows phase (amber in buffer zone, red in danger)
   const overtime = timing && elapsed > timing.idealSeconds ? elapsed - timing.idealSeconds : 0;
 
-  // Group branches
   const tytBranches = Object.entries(BRANCH_TIMINGS).filter(([k]) => k.startsWith("tyt_"));
   const aytBranches = Object.entries(BRANCH_TIMINGS).filter(([k]) => k.startsWith("ayt_"));
 
@@ -301,7 +454,6 @@ export default function FocusTimer() {
     <div className="relative min-h-[calc(100vh-3.5rem)] overflow-hidden">
       {/* ─── Background Glow Layer ──────────────────────────────── */}
       <div className="fixed inset-0 -z-10 overflow-hidden" style={{ top: "3.5rem" }}>
-        {/* Base gradient that shifts with phase */}
         <div
           className="absolute inset-0 transition-all duration-[3000ms] ease-in-out"
           style={{
@@ -311,7 +463,6 @@ export default function FocusTimer() {
           }}
         />
 
-        {/* Glowing orbs */}
         {selectedBranch && (isRunning || elapsed > 0) && (
           <>
             {[0, 1, 2, 3, 4, 5, 6].map((i) => (
@@ -330,16 +481,18 @@ export default function FocusTimer() {
             <span className="text-sm font-medium tracking-wide uppercase">Branş Kronometresi</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Deneme Zamanlayıcı</h1>
+          {!isDemoMode && (
+            <p className="text-xs text-muted-foreground/60">
+              Zamanlayıcı bulutta çalışır — ekranı kapatsanız bile süre sayılmaya devam eder
+            </p>
+          )}
         </div>
 
         {/* Branch Selector */}
         <div className="w-full max-w-md animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
           <Select
             value={selectedBranch ?? undefined}
-            onValueChange={(value) => {
-              setSelectedBranch(value);
-              reset();
-            }}
+            onValueChange={handleBranchSelect}
             disabled={isRunning}
           >
             <SelectTrigger
@@ -465,7 +618,7 @@ export default function FocusTimer() {
           {!isRunning ? (
             <Button
               size="lg"
-              onClick={() => setIsRunning(true)}
+              onClick={handleStart}
               disabled={!selectedBranch}
               className={cn(
                 "rounded-full px-8 h-14 text-base font-semibold gap-2 transition-all duration-300",
@@ -480,7 +633,7 @@ export default function FocusTimer() {
           ) : (
             <Button
               size="lg"
-              onClick={pause}
+              onClick={handlePause}
               variant="secondary"
               className="rounded-full px-8 h-14 text-base font-semibold gap-2 bg-white/10 hover:bg-white/15 border border-white/10"
             >
@@ -506,7 +659,7 @@ export default function FocusTimer() {
             <Button
               size="lg"
               variant="ghost"
-              onClick={reset}
+              onClick={handleReset}
               className="rounded-full h-14 w-14 p-0 text-muted-foreground hover:text-foreground hover:bg-white/10"
             >
               <RotateCcw className="w-5 h-5" />
@@ -527,12 +680,10 @@ export default function FocusTimer() {
                 )}
                 style={{ width: `${Math.min((elapsed / dangerSeconds) * 100, 100)}%` }}
               />
-              {/* Warning threshold marker */}
               <div
                 className="absolute top-0 bottom-0 w-px bg-white/20"
                 style={{ left: `${(timing.warningSeconds / dangerSeconds) * 100}%` }}
               />
-              {/* Ideal time marker */}
               <div
                 className="absolute top-0 bottom-0 w-px bg-white/30"
                 style={{ left: `${(timing.idealSeconds / dangerSeconds) * 100}%` }}
@@ -592,13 +743,20 @@ export default function FocusTimer() {
               notes,
             });
             toast.success("Deneme kaydedildi!");
-            reset();
+            if (isDemoMode) {
+              setLocalRunning(false);
+              setLocalElapsed(0);
+            } else {
+              setDisplayElapsed(0);
+              setPendingBranch(null);
+              if (user) await resetTimer(user.uid);
+            }
           }}
         />
       )}
 
       {/* ─── Dev Speed Panel (dev server only) ─── */}
-      {IS_DEV && (
+      {IS_DEV && isDemoMode && (
         <DevSpeedPanel speed={speedMultiplier} onSpeedChange={setSpeedMultiplier} />
       )}
     </div>

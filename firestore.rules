@@ -57,5 +57,10 @@ service cloud.firestore {
       allow delete: if request.auth != null &&
         (resource.data.userA == request.auth.uid || resource.data.userB == request.auth.uid);
     }
+
+    // Cloud timer sessions: one document per user, only owner can read/write
+    match /timerSessions/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }

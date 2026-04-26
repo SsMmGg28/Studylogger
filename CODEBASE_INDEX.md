@@ -1,6 +1,6 @@
-# Codebase Index
+﻿# Codebase Index
 > Auto-generated complete reference of all files, features, functions, and their locations.
-> Last generated: 2026-04-20
+> Last generated: 2026-04-25
 
 ## Table of Contents
 - [Features Overview](#features-overview)
@@ -18,9 +18,11 @@
 | Goals | src/app/goals/page.tsx, src/hooks/useGoals.ts, src/components/GoalCard.tsx, src/lib/db.ts | Weekly/monthly goal management for minutes or question counts. |
 | Statistics | src/app/stats/page.tsx, src/components/TopicBreakdownChart.tsx, src/components/EfficiencyCard.tsx | Topic-level breakdowns and twelve-week efficiency trend reporting. |
 | Friends and Leaderboard | src/app/friends/page.tsx, src/hooks/useFriends.ts, src/components/Leaderboard.tsx, src/lib/db.ts | Friend requests, accepted friendships, privacy-aware comparisons, and leaderboards. |
-| Focus Timer | src/components/FocusTimer.tsx, src/app/timer/page.tsx | Pomodoro-style stopwatch with YKS branch timings, animated phase orbs (focus/warning/danger), and post-session log-saving dialog. |
+| Focus Timer | src/components/FocusTimer.tsx, src/app/timer/page.tsx, src/lib/db.ts | Pomodoro-style stopwatch with YKS branch timings, animated phase orbs (focus/warning/danger), server-persisted timer sessions via Firestore, and post-session exam log-saving dialog. |
 | Exam Trend Charts | src/components/ExamTrendChart.tsx, src/app/stats/page.tsx | Recharts line chart for TYT/AYT total net score progression across full exam records. |
-| Desktop Companion API | src/app/api/desktop/log/route.ts, src/app/api/desktop/stats/route.ts | Bearer-auth REST endpoints used by the desktop app to post study sessions and retrieve today's stats. |
+| Desktop Companion API | src/app/api/desktop/log/route.ts, src/app/api/desktop/stats/route.ts, src/app/api/auth/token/route.ts | Bearer-auth REST endpoints used by the desktop app to post study sessions, retrieve today's stats, and generate temporary custom auth tokens. |
+| Weekly Schedule | src/app/program/page.tsx, src/hooks/useSchedule.ts, src/lib/db.ts | Weekly task planner with a 7-day grid, add/complete/delete tasks per subject-topic or branch exam, completion dialogs, and weekly progress bar. |
+| Topic Progress Tracking | src/app/topics/page.tsx, src/components/TopicTree.tsx, src/hooks/useTopicProgress.ts, src/lib/db.ts | Curriculum progress tracker with TYT/AYT subject grids, per-topic completion marking, per-topic study stats from logs, schedule task overlays, and quick-add task dialogs. |
 | Notifications and Streaks | src/lib/notifications.ts, src/components/ExamCountdown.tsx, src/components/StreakBadge.tsx | Local reminder heuristics, notification permission handling, countdowns, and streak status. |
 | Offline and PWA | src/lib/offlineQueue.ts, public/sw.js, public/manifest.json, src/app/layout.tsx | IndexedDB queueing, service worker caching, and installable PWA metadata. |
 | Demo Mode | src/lib/demo-data.ts, src/hooks/useAuth.ts, src/hooks/useStudyLogs.ts, src/hooks/useFriends.ts | Local demo profile, logs, and friend comparisons without Firebase runtime setup. |
@@ -93,7 +95,7 @@
 | — | — | config | Firebase CLI config; no exported symbols. |
 
 ### `firestore.rules`
-**Purpose**: Firestore security rules for users, usernames, study logs, friendships, goals, and notification tokens.
+**Purpose**: Firestore security rules for users, usernames, study logs, friendships, goals, notification tokens, topic progress, weekly schedule items, and timer sessions.
 **Depends on**: None
 
 | Line | Symbol | Type | Description |
@@ -157,22 +159,23 @@
 | — | — | styles | Global stylesheet with theme tokens and animations; no exported symbols. |
 
 ### `src/app/layout.tsx`
-**Purpose**: Root app layout that sets metadata, fonts, dark theme shell, toaster placement, and service worker registration.
+**Purpose**: Root app layout that sets metadata, fonts, dark theme shell with a global blue ambient background (6 animated glow orbs), toaster placement, and service worker registration.
 **Depends on**: src/components/ui/sonner.tsx, src/app/globals.css
 
 | Line | Symbol | Type | Description |
 |------|--------|------|-------------|
 | L18 | `metadata` | const | Next.js metadata object for app title, description, manifest, and Apple web app settings. |
-| L29 | `viewport` | const | Next.js viewport config defining the browser theme color. |
-| L33 | `RootLayout` | component | Root layout component receiving `children: React.ReactNode` and rendering the global shell. |
+| L37 | `viewport` | const | Next.js viewport config defining the browser theme color. |
+| L41 | `RootLayout` | component | Root layout component receiving `children: React.ReactNode` and rendering the global shell. |
 
 ### `src/app/page.tsx`
-**Purpose**: Dashboard page showing weekly and monthly study summaries, charts, goals, recent logs, streaks, and revision suggestions.
-**Depends on**: src/components/AuthGuard.tsx, src/components/Navbar.tsx, src/components/LogCard.tsx, src/components/SubjectChart.tsx, src/components/WeeklyCalendar.tsx, src/components/WeeklyBarChart.tsx, src/components/ExamCountdown.tsx, src/components/StreakBadge.tsx, src/components/GoalCard.tsx, src/components/RevisionSuggestions.tsx, src/components/ui/card.tsx, src/components/ui/button.tsx, src/components/ui/tabs.tsx, src/hooks/useAuth.ts, src/hooks/useStudyLogs.ts, src/hooks/useGoals.ts, src/lib/db.ts, src/lib/notifications.ts
+**Purpose**: Dashboard page showing weekly and monthly study + exam summaries, charts, goals, recent logs, streaks, and revision suggestions.
+**Depends on**: src/components/AuthGuard.tsx, src/components/Navbar.tsx, src/components/LogCard.tsx, src/components/SubjectChart.tsx, src/components/WeeklyCalendar.tsx, src/components/WeeklyBarChart.tsx, src/components/ExamCountdown.tsx, src/components/StreakBadge.tsx, src/components/GoalCard.tsx, src/components/RevisionSuggestions.tsx, src/components/ui/card.tsx, src/components/ui/button.tsx, src/components/ui/tabs.tsx, src/hooks/useAuth.ts, src/hooks/useStudyLogs.ts, src/hooks/useGoals.ts, src/lib/db.ts, src/lib/demo-data.ts, src/lib/notifications.ts
 
 | Line | Symbol | Type | Description |
 |------|--------|------|-------------|
-| L54 | `DashboardPage` | component | Protected dashboard component that aggregates logs and goals into overview cards and visualizations. |
+| L28 | `StatCard` | component | Inner stat card component for icon + label + value summaries. |
+| L55 | `DashboardPage` | component | Protected dashboard that aggregates study and exam logs into overview cards, charts, goals, and revision prompts. |
 
 ### `src/app/auth/login/page.tsx`
 **Purpose**: Login page for email/password, Google OAuth, and demo-mode entry.
@@ -248,6 +251,14 @@
 | L4 | `POST` | function | Verifies Firebase `idToken`, creates 14-day `session` HttpOnly cookie via `adminAuth.createSessionCookie`. |
 | L37 | `DELETE` | function | Deletes `session` and `client-session` cookies. |
 
+### `src/app/api/auth/token/route.ts`
+**Purpose**: API route that generates a Firebase Custom Token for the currently authenticated session user, used by the desktop companion app.
+**Depends on**: src/lib/firebase-admin.ts
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L5 | `POST` | function | Reads session cookie, verifies it via `adminAuth`, and returns a short-lived Firebase custom token for desktop app authentication. |
+
 ### `src/app/api/cron/reminders/route.ts`
 **Purpose**: Cron endpoint for push notification reminders — currently disabled, returns `{ status: "disabled" }`.
 **Depends on**: None
@@ -288,13 +299,30 @@
 |------|--------|------|-------------|
 | L19 | `StatsPage` | component | Protected two-tab statistics page: study stats (topic breakdown, efficiency trend, summary) and exam stats (tam & branch exam analysis with `ExamTrendChart`). |
 
+### `src/app/program/page.tsx`
+**Purpose**: Protected weekly schedule page with a 7-day task grid for adding, completing, and deleting subject/topic study tasks and branch exam entries per day.
+**Depends on**: src/components/AuthGuard.tsx, src/components/Navbar.tsx, src/hooks/useAuth.ts, src/hooks/useSchedule.ts, src/lib/db.ts, src/lib/subjects.ts, src/components/ui/button.tsx, src/components/ui/input.tsx, src/components/ui/label.tsx, src/components/ui/select.tsx, src/components/ui/dialog.tsx, src/components/ui/badge.tsx
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L560 | `ProgramPage` | component | Protected weekly planner page with week-navigation controls, progress bar, responsive 7-day desktop grid and mobile day-tabs, plus add/complete/delete task dialogs. |
+
+### `src/app/topics/page.tsx`
+**Purpose**: Protected page that embeds the full TopicTree component for curriculum progress tracking.
+**Depends on**: src/components/AuthGuard.tsx, src/components/Navbar.tsx, src/components/TopicTree.tsx
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L7 | `TopicsPage` | component | Minimal page wrapper rendering `<AuthGuard><Navbar /><TopicTree /></AuthGuard>`. |
+
 ### `src/app/settings/page.tsx`
-**Purpose**: Protected settings page for profile display name updates, privacy toggles, and notification permission setup.
+**Purpose**: Protected settings page for profile display name updates, privacy toggles, notification permission setup, and desktop companion token generation.
 **Depends on**: src/components/AuthGuard.tsx, src/components/Navbar.tsx, src/hooks/useAuth.ts, src/lib/db.ts, src/components/ui/card.tsx, src/components/ui/input.tsx, src/components/ui/label.tsx, src/components/ui/button.tsx, src/components/ui/badge.tsx, src/components/ui/switch.tsx, src/lib/notifications.ts
 
 | Line | Symbol | Type | Description |
 |------|--------|------|-------------|
-| L40 | `SettingsPage` | component | Protected settings screen that updates `displayName`, privacy flags, and notification permission state. |
+| L18 | `PrivacyToggle` | component | Inner reusable toggle row for privacy setting switches. |
+| L40 | `SettingsPage` | component | Protected settings screen that updates `displayName`, privacy flags, notification permissions, and generates desktop companion tokens via `/api/auth/token`. |
 
 ### `src/components/AuthGuard.tsx`
 **Purpose**: Route guard wrapper that blocks unauthenticated access and redirects incomplete Google signups to username setup.
@@ -305,12 +333,13 @@
 | L7 | `AuthGuard` | component | Guard component receiving `children` and redirecting based on auth/profile readiness. |
 
 ### `src/components/Navbar.tsx`
-**Purpose**: Sticky navigation bar with primary route links and a user dropdown menu.
+**Purpose**: Sticky top navigation bar with primary route links (Dashboard, Log, Timer, Program, History, Goals, Stats, Friends, Kazanımlar) and a user dropdown menu; also renders a mobile bottom tab bar.
 **Depends on**: src/lib/utils.ts, src/hooks/useAuth.ts, src/lib/auth.ts, src/components/ui/button.tsx, src/components/ui/avatar.tsx, src/components/ui/dropdown-menu.tsx
 
 | Line | Symbol | Type | Description |
 |------|--------|------|-------------|
-| L28 | `Navbar` | component | Navigation component with route highlighting and logout/settings actions. |
+| L19 | `navItems` | const | Array of 9 nav route configs (`href`, `label`, `mobileLabel`, `icon`). |
+| L31 | `Navbar` | component | Navigation component with route highlighting, mobile bottom tab bar, and logout/settings actions. |
 
 ### `src/components/StudyLogForm.tsx`
 **Purpose**: Form component for creating or editing normal study-session logs with subject/topic selection and optional tags.
@@ -427,23 +456,36 @@
 | L15 | `ExamTrendChart` | component | Memoized; filters to `examCategory === "tam"` for given type; Y-axis max 120 (TYT) or 80 (AYT). |
 
 ### `src/components/FocusTimer.tsx`
-**Purpose**: Full-featured focus timer with YKS branch timings (TYT/AYT subjects), three-phase system (focus/warning/danger), animated glow orbs, and post-session log-saving dialog.
-**Depends on**: src/hooks/useAuth.ts, src/hooks/useStudyLogs.ts, src/lib/subjects.ts, src/lib/utils.ts
+**Purpose**: Full-featured focus timer with YKS branch timings (TYT/AYT subjects), three-phase system (focus/warning/danger), animated glow orbs, persistent server-synced timer sessions via Firestore, and post-session exam log-saving dialog.
+**Depends on**: src/hooks/useAuth.ts, src/lib/db.ts, src/lib/utils.ts
 
 | Line | Symbol | Type | Description |
 |------|--------|------|-------------|
-| L29 | `BranchTiming` | interface | `{ label, idealSeconds, warningSeconds }` — timing config per YKS branch. |
-| L32 | `BRANCH_TIMINGS` | const | 11-entry map of branch keys → `BranchTiming` (e.g. `tyt_matematik: { idealSeconds: 75*60, warningSeconds: 55*60 }`). |
-| L48 | `BRANCH_TO_SUBJECT` | const | Maps branch timing key → SUBJECTS id (null = multi-subject picker required). |
-| L54 | `Phase` | type | `"focus" \| "warning" \| "danger"` — timer phase enum. |
-| L57 | `DANGER_THRESHOLD_RATIO` | const | `1.15` — danger starts at 115% of ideal time. |
-| L60 | `getDangerSeconds` | function | `timing.idealSeconds * DANGER_THRESHOLD_RATIO`. |
-| L64 | `getPhase` | function | Returns `Phase` based on elapsed vs. warning/danger thresholds. |
-| L70 | `getPhaseProgress` | function | Returns 0–1 progress fraction within current phase. |
-| L82 | `PHASE_COLORS` | const | Phase → `{ hue, chroma, name }` in oklch color space (cyan/yellow/orange). |
-| L87 | `formatTime` | function | Formats seconds as `MM:SS` or `HH:MM:SS`. |
-| L93 | `GlowOrb` | component | Animated background orb with phase-based oklch color and size randomization. |
-| L121 | `FocusTimer` | component | Full timer component; manages `elapsed` via `setInterval`; `saveSession` opens dialog to pick subject/topic/questions before calling `useStudyLogs.add()`. |
+| L41 | `BranchTiming` | interface | `{ label, idealSeconds, warningSeconds }` — timing config per YKS branch. |
+| L47 | `BRANCH_TIMINGS` | const | 11-entry map of branch keys → `BranchTiming` (e.g. `tyt_matematik: { idealSeconds: 75*60, warningSeconds: 55*60 }`). |
+| L61 | `Phase` | type | `"focus" \| "warning" \| "danger"` — timer phase enum. |
+| L63 | `DANGER_THRESHOLD_RATIO` | const | `1.15` — danger starts at 115% of ideal time. |
+| L65 | `getDangerSeconds` | function | `timing.idealSeconds * DANGER_THRESHOLD_RATIO`. |
+| L69 | `getPhase` | function | Returns `Phase` based on elapsed vs. warning/danger thresholds. |
+| L75 | `getPhaseProgress` | function | Returns 0–1 progress fraction within current phase. |
+| L86 | `PHASE_COLORS` | const | Phase → `{ hue, chroma, name }` in oklch color space (cyan/yellow/orange). |
+| L92 | `formatTime` | function | Formats seconds as `MM:SS` or `HH:MM:SS`. |
+| L101 | `computeElapsed` | function | Computes current elapsed seconds from a `TimerSession`’s `startedAt` timestamp and accumulated total. |
+| L116 | `GlowOrb` | component | Animated background orb with phase-based oklch color and size randomization. |
+| L269 | `FocusTimer` | component | Full timer component; subscribes to server-synced `TimerSession` via Firestore real-time listener; saves branch exam log via `addExamLog`. |
+
+### `src/components/TopicTree.tsx`
+**Purpose**: Full curriculum progress tracker with TYT/AYT subject grids, per-topic completion state, per-topic study-log stats, schedule task overlays, and quick-add task dialogs.
+**Depends on**: src/hooks/useTopicProgress.ts, src/hooks/useStudyLogs.ts, src/hooks/useAuth.ts, src/lib/db.ts, src/lib/subjects.ts, src/components/ui/button.tsx, src/components/ui/input.tsx, src/components/ui/label.tsx, src/components/ui/dialog.tsx
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L43 | `hexToHue` | function | Converts a CSS hex color string to an approximate oklch hue angle for glassmorphic glows. |
+| L81 | `SubjectCard` | component | Grid tile showing subject progress bar, completion count, and branch exam count; opens the detail panel on click. |
+| L155 | `SubjectPanel` | component | Slide-in right panel showing topic list with completion toggles, per-topic time/question stats, task info badges, and quick-add buttons. |
+| L404 | `SummaryBanner` | component | Banner displaying total/completed topic count and an overall progress bar. |
+| L448 | `QuickAddTaskDialog` | component | Modal dialog for quickly adding a schedule task for a specific topic with optional target questions/minutes and date. |
+| L553 | `TopicTree` | component | Main export; manages TYT/AYT tab, open subject panel, schedule items, exam logs, and topic stats aggregation. |
 
 ### `src/components/ui/avatar.tsx`
 **Purpose**: Avatar primitive wrappers and grouped avatar helpers built on Radix UI.
@@ -623,6 +665,14 @@
 |------|--------|------|-------------|
 | L14 | `useGoals` | hook | Returns goals, loading state, refresh, add, and remove actions for a user ID. |
 
+### `src/hooks/useSchedule.ts`
+**Purpose**: Hook for managing weekly schedule items: fetching, adding, completing, and removing tasks for one user and week.
+**Depends on**: src/lib/db.ts
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L12 | `useSchedule` | hook | Returns `{ items, loading, add, complete, remove, reload }` for a given `uid` and `weekStart` date string. |
+
 ### `src/hooks/useStudyLogs.ts`
 **Purpose**: Encapsulates study-log retrieval, mutations, demo mode, and offline queue synchronization.
 **Depends on**: src/lib/db.ts, src/lib/demo-data.ts, src/lib/offlineQueue.ts
@@ -630,6 +680,14 @@
 | Line | Symbol | Type | Description |
 |------|--------|------|-------------|
 | L18 | `useStudyLogs` | hook | Returns logs, loading state, refresh, add, update, and remove actions with demo/offline handling. |
+
+### `src/hooks/useTopicProgress.ts`
+**Purpose**: Hook for reading and toggling topic completion state, and computing per-subject and overall curriculum progress.
+**Depends on**: src/lib/db.ts, src/lib/demo-data.ts, src/hooks/useAuth.ts
+
+| Line | Symbol | Type | Description |
+|------|--------|------|-------------|
+| L8 | `useTopicProgress` | hook | Returns `{ progress, loading, toggleTopic, isCompleted, getSubjectCompletedCount, getTotalStats }` for the signed-in user. |
 
 ### `src/lib/firebase.ts`
 **Purpose**: Initializes Firebase app, auth, and Firestore only in the browser and tolerates missing env config.
@@ -655,37 +713,53 @@
 | L83 | `completeGoogleProfile` | function | Reserves a username and creates the missing user profile for a Google-authenticated user. |
 
 ### `src/lib/db.ts`
-**Purpose**: Core Firestore data-access layer defining the project’s shared domain models and CRUD/aggregation helpers.
+**Purpose**: Central Firestore data-access layer; exports all type interfaces and CRUD helpers.
 **Depends on**: src/lib/firebase.ts
 
 | Line | Symbol | Type | Description |
 |------|--------|------|-------------|
-| L20 | `StudyLog` | interface | Main study-log model containing subject, topic, duration, question count, notes, tags, date, and timestamp metadata. |
-| L33 | `StudyGoal` | interface | Goal model containing subject, metric, period, and numeric target. |
-| L41 | `UserProfile` | interface | User profile model with display name, username, email, and privacy settings. |
-| L52 | `Friendship` | interface | Friendship model containing both users, initiator, and pending/accepted status. |
-| L62 | `addStudyLog` | function | Adds a study log for `uid` and returns the created document ID. |
-| L74 | `updateStudyLog` | function | Partially updates an existing study-log document by ID. |
-| L81 | `deleteStudyLog` | function | Deletes a study-log document by ID. |
-| L85 | `getUserStudyLogs` | function | Fetches and date-sorts all study logs for one user. |
-| L101 | `getFriendStudyLogs` | function | Fetches and date-sorts up to 200 recent study logs for one friend. |
-| L113 | `getUserProfile` | function | Reads one user profile document and returns `UserProfile | null`. |
-| L118 | `updateUserProfile` | function | Partially updates a user profile document by user ID. |
-| L125 | `getUserByUsername` | function | Resolves a lowercase username to `{ uid, profile }` if it exists. |
-| L139 | `sendFriendRequest` | function | Creates or overwrites a friendship document in `pending` state for two user IDs. |
-| L149 | `acceptFriendRequest` | function | Marks an existing friendship document as `accepted`. |
-| L154 | `removeFriend` | function | Deletes the friendship document for two users. |
-| L159 | `getFriendships` | function | Fetches all friendship documents where the given user appears in either slot. |
-| L174 | `ExamLog` | interface | Exam-log model supporting full exams and branch exams with nets, notes, and duration. |
-| L191 | `addExamLog` | function | Adds an exam log for `uid` and returns the created document ID. |
-| L203 | `deleteExamLog` | function | Deletes an exam-log document by ID. |
-| L207 | `getUserExamLogs` | function | Fetches and reverse-date-sorts exam logs for one user. |
-| L216 | `aggregateBySubject` | function | Reduces study logs into `{ minutes, questions }` totals keyed by subject. |
-| L226 | `aggregateByTopic` | function | Reduces study logs into `{ minutes, questions }` totals keyed by `subject:topic`. |
-| L237 | `getLastStudiedByTopic` | function | Returns the latest study date for each `subject:topic` key. |
-| L250 | `getGoals` | function | Reads all goal documents from `users/{uid}/goals`. |
-| L256 | `setGoal` | function | Creates a goal document for a user and returns the document ID. |
-| L264 | `deleteGoal` | function | Deletes one goal document from a user’s goals subcollection. |
+| L22 | `stripUndefined` | function | Recursively removes undefined values from an object before Firestore writes. |
+| L28 | `StudyLog` | interface | Core study-log model with subject, topic, minutes, date, optional notes and net-new fields. |
+| L41 | `StudyGoal` | interface | Weekly minute target per subject with progress tracking fields. |
+| L49 | `UserProfile` | interface | User profile model including username, FCM token, exam date, branch, and privacy flag. |
+| L65 | `Friendship` | interface | Friend-request model with sender/receiver UIDs and accepted status. |
+| L75 | `addStudyLog` | function | Adds a new study log to a user's `studyLogs` subcollection; queues offline if no connection. |
+| L87 | `updateStudyLog` | function | Overwrites an existing study log document (merges fields). |
+| L94 | `deleteStudyLog` | function | Deletes one study log document by ID. |
+| L98 | `getUserStudyLogs` | function | Fetches all study logs for a given user, ordered by date descending. |
+| L114 | `getFriendStudyLogs` | function | Fetches study logs for a list of friend UIDs in a date range. |
+| L126 | `getUserProfile` | function | Fetches the profile document for a given UID. |
+| L131 | `updateUserProfile` | function | Merges new fields into a user's profile document. |
+| L138 | `getUserByUsername` | function | Queries Firestore for a user with matching username (case-insensitive). |
+| L152 | `sendFriendRequest` | function | Creates a pending Friendship document between two users. |
+| L162 | `acceptFriendRequest` | function | Sets the `accepted` flag on an existing Friendship document to true. |
+| L167 | `removeFriend` | function | Deletes a Friendship document by ID. |
+| L172 | `getFriendships` | function | Fetches all Friendship documents where the given user is sender or receiver. |
+| L187 | `ExamLog` | interface | Exam/mock-test log model with subject, branch, correct/wrong/empty counts, and duration. |
+| L204 | `addExamLog` | function | Adds an exam log document to a user's `examLogs` subcollection. |
+| L216 | `deleteExamLog` | function | Deletes one exam log document by ID. |
+| L220 | `getUserExamLogs` | function | Fetches all exam logs for a given user, ordered by date descending. |
+| L229 | `aggregateBySubject` | function | Aggregates study logs by subject, summing total minutes per subject. |
+| L239 | `aggregateByTopic` | function | Aggregates study logs by topic within a subject, summing minutes per topic. |
+| L250 | `getLastStudiedByTopic` | function | Returns the latest study date for every topic studied by the user. |
+| L264 | `calculateSM2Intervals` | function | Implements SM-2 spaced-repetition algorithm; returns next review date and updated e-factor. |
+| L314 | `getGoals` | function | Fetches all weekly goal documents for a user. |
+| L320 | `setGoal` | function | Creates or merges a weekly goal for a subject. |
+| L328 | `deleteGoal` | function | Deletes one goal document from a user's goals subcollection. |
+| L334 | `TopicProgress` | interface | `{ completed: string[] }` - per-subject completed topic list. |
+| L339 | `getTopicProgress` | function | Fetches completed topic lists for all subjects keyed by subject ID. |
+| L349 | `setTopicCompleted` | function | Atomically marks or unmarks a topic as completed using `arrayUnion`/`arrayRemove`. |
+| L365 | `ScheduleItem` | interface | Weekly schedule task model with subject, topic/branch, date, week start, targets, status, and actuals. |
+| L381 | `getScheduleItems` | function | Fetches schedule items for one user filtered by `weekStart`. |
+| L391 | `getAllScheduleItems` | function | Fetches all schedule items across all weeks for one user. |
+| L397 | `addScheduleItem` | function | Adds a new schedule task and returns the document ID. |
+| L408 | `completeScheduleItem` | function | Marks a schedule item as done and records actual questions/minutes. |
+| L420 | `deleteScheduleItem` | function | Deletes a schedule item document. |
+| L428 | `TimerSession` | interface | Real-time timer session model tracking branch key, running/paused status, start timestamp, and accumulated seconds. |
+| L440 | `subscribeTimerSession` | function | Subscribes to the user's active `TimerSession` document in real time via `onSnapshot`. |
+| L452 | `startTimer` | function | Creates or overwrites a `timerSessions/{uid}` document to start/resume a timer run. |
+| L469 | `pauseTimer` | function | Updates the timer session to paused state, persisting current elapsed seconds. |
+| L480 | `resetTimer` | function | Deletes the timer session document (after save or reset). |
 
 ### `src/lib/demo-data.ts`
 **Purpose**: Provides demo-only profile, study-log, and friend datasets for local exploration without Firebase.
@@ -754,14 +828,18 @@ Alphabetical cross-reference of every symbol with its file location.
 
 | Symbol | Type | File | Line |
 |--------|------|------|------|
-| `acceptFriendRequest` | function | `src/lib/db.ts` | L149 |
-| `addExamLog` | function | `src/lib/db.ts` | L191 |
-| `addStudyLog` | function | `src/lib/db.ts` | L62 |
-| `aggregateBySubject` | function | `src/lib/db.ts` | L216 |
-| `aggregateByTopic` | function | `src/lib/db.ts` | L226 |
+| `acceptFriendRequest` | function | `src/lib/db.ts` | L162 |
+| `addExamLog` | function | `src/lib/db.ts` | L204 |
+| `addScheduleItem` | function | `src/lib/db.ts` | L397 |
+| `addStudyLog` | function | `src/lib/db.ts` | L75 |
+| `adminAuth` | const | `src/lib/firebase-admin.ts` | L25 |
+| `adminDb` | const | `src/lib/firebase-admin.ts` | L24 |
+| `adminMessaging` | const | `src/lib/firebase-admin.ts` | L26 |
+| `aggregateBySubject` | function | `src/lib/db.ts` | L229 |
+| `aggregateByTopic` | function | `src/lib/db.ts` | L239 |
 | `app` | const | `src/lib/firebase.ts` | L34 |
-| `AuthGuard` | component | `src/components/AuthGuard.tsx` | L7 |
 | `auth` | const | `src/lib/firebase.ts` | L31 |
+| `AuthGuard` | component | `src/components/AuthGuard.tsx` | L7 |
 | `Avatar` | component | `src/components/ui/avatar.tsx` | L8 |
 | `AvatarBadge` | component | `src/components/ui/avatar.tsx` | L60 |
 | `AvatarFallback` | component | `src/components/ui/avatar.tsx` | L44 |
@@ -770,8 +848,12 @@ Alphabetical cross-reference of every symbol with its file location.
 | `AvatarImage` | component | `src/components/ui/avatar.tsx` | L28 |
 | `Badge` | component | `src/components/ui/badge.tsx` | L30 |
 | `badgeVariants` | const | `src/components/ui/badge.tsx` | L7 |
+| `BRANCH_TIMINGS` | const | `src/components/FocusTimer.tsx` | L47 |
+| `BranchTiming` | interface | `src/components/FocusTimer.tsx` | L41 |
 | `Button` | component | `src/components/ui/button.tsx` | L44 |
 | `buttonVariants` | const | `src/components/ui/button.tsx` | L7 |
+| `calcLongest` | function | `src/components/StreakBadge.tsx` | L58 |
+| `calculateSM2Intervals` | function | `src/lib/db.ts` | L264 |
 | `Card` | component | `src/components/ui/card.tsx` | L5 |
 | `CardAction` | component | `src/components/ui/card.tsx` | L59 |
 | `CardContent` | component | `src/components/ui/card.tsx` | L72 |
@@ -783,15 +865,19 @@ Alphabetical cross-reference of every symbol with its file location.
 | `checkStreakWarning` | function | `src/lib/notifications.ts` | L46 |
 | `cn` | function | `src/lib/utils.ts` | L4 |
 | `completeGoogleProfile` | function | `src/lib/auth.ts` | L83 |
-| `DashboardPage` | component | `src/app/page.tsx` | L54 |
+| `completeScheduleItem` | function | `src/lib/db.ts` | L408 |
+| `computeElapsed` | function | `src/components/FocusTimer.tsx` | L101 |
+| `DANGER_THRESHOLD_RATIO` | const | `src/components/FocusTimer.tsx` | L63 |
+| `DashboardPage` | component | `src/app/page.tsx` | L55 |
 | `db` | const | `src/lib/firebase.ts` | L33 |
+| `deleteExamLog` | function | `src/lib/db.ts` | L216 |
+| `deleteGoal` | function | `src/lib/db.ts` | L328 |
+| `deleteScheduleItem` | function | `src/lib/db.ts` | L420 |
+| `deleteStudyLog` | function | `src/lib/db.ts` | L94 |
 | `DEMO_FRIENDS` | const | `src/lib/demo-data.ts` | L229 |
 | `DEMO_LOGS` | const | `src/lib/demo-data.ts` | L53 |
 | `DEMO_PROFILE` | const | `src/lib/demo-data.ts` | L8 |
 | `DEMO_UID` | const | `src/lib/demo-data.ts` | L6 |
-| `deleteExamLog` | function | `src/lib/db.ts` | L203 |
-| `deleteGoal` | function | `src/lib/db.ts` | L264 |
-| `deleteStudyLog` | function | `src/lib/db.ts` | L81 |
 | `Dialog` | component | `src/components/ui/dialog.tsx` | L10 |
 | `DialogClose` | component | `src/components/ui/dialog.tsx` | L28 |
 | `DialogContent` | component | `src/components/ui/dialog.tsx` | L50 |
@@ -820,24 +906,37 @@ Alphabetical cross-reference of every symbol with its file location.
 | `EfficiencyCard` | component | `src/components/EfficiencyCard.tsx` | L14 |
 | `eslintConfig` | const | `eslint.config.mjs` | L5 |
 | `ExamCountdown` | component | `src/components/ExamCountdown.tsx` | L40 |
-| `ExamLog` | interface | `src/lib/db.ts` | L174 |
+| `ExamLog` | interface | `src/lib/db.ts` | L187 |
 | `ExamLogForm` | component | `src/components/ExamLogForm.tsx` | L48 |
+| `ExamTrendChart` | component | `src/components/ExamTrendChart.tsx` | L15 |
+| `ExamTrendChartProps` | interface | `src/components/ExamTrendChart.tsx` | L11 |
+| `FocusTimer` | component | `src/components/FocusTimer.tsx` | L269 |
+| `formatTime` | function | `src/components/FocusTimer.tsx` | L92 |
 | `FriendData` | interface | `src/hooks/useFriends.ts` | L18 |
-| `Friendship` | interface | `src/lib/db.ts` | L52 |
+| `Friendship` | interface | `src/lib/db.ts` | L65 |
 | `FriendsPage` | component | `src/app/friends/page.tsx` | L23 |
-| `getFriendships` | function | `src/lib/db.ts` | L159 |
-| `getFriendStudyLogs` | function | `src/lib/db.ts` | L101 |
-| `getGoals` | function | `src/lib/db.ts` | L250 |
-| `getLastStudiedByTopic` | function | `src/lib/db.ts` | L237 |
+| `getAllScheduleItems` | function | `src/lib/db.ts` | L391 |
+| `getDangerSeconds` | function | `src/components/FocusTimer.tsx` | L65 |
+| `getFriendships` | function | `src/lib/db.ts` | L172 |
+| `getFriendStudyLogs` | function | `src/lib/db.ts` | L114 |
+| `getGoals` | function | `src/lib/db.ts` | L314 |
+| `getLastStudiedByTopic` | function | `src/lib/db.ts` | L250 |
 | `getPendingCount` | function | `src/lib/offlineQueue.ts` | L71 |
-| `getUserByUsername` | function | `src/lib/db.ts` | L125 |
-| `getUserExamLogs` | function | `src/lib/db.ts` | L207 |
-| `getUserProfile` | function | `src/lib/db.ts` | L113 |
-| `getUserStudyLogs` | function | `src/lib/db.ts` | L85 |
+| `getPhase` | function | `src/components/FocusTimer.tsx` | L69 |
+| `getPhaseProgress` | function | `src/components/FocusTimer.tsx` | L75 |
+| `getScheduleItems` | function | `src/lib/db.ts` | L381 |
+| `getTopicProgress` | function | `src/lib/db.ts` | L339 |
+| `getUserByUsername` | function | `src/lib/db.ts` | L138 |
+| `getUserExamLogs` | function | `src/lib/db.ts` | L220 |
+| `getUserProfile` | function | `src/lib/db.ts` | L126 |
+| `getUserStudyLogs` | function | `src/lib/db.ts` | L98 |
+| `GlowOrb` | component | `src/components/FocusTimer.tsx` | L116 |
 | `GoalCard` | component | `src/components/GoalCard.tsx` | L15 |
 | `GoalsPage` | component | `src/app/goals/page.tsx` | L33 |
+| `hexToHue` | function | `src/components/TopicTree.tsx` | L43 |
 | `HistoryPage` | component | `src/app/history/page.tsx` | L32 |
 | `Input` | component | `src/components/ui/input.tsx` | L5 |
+| `isFirebaseAdminConfigured` | const | `src/lib/firebase-admin.ts` | L6 |
 | `Label` | component | `src/components/ui/label.tsx` | L8 |
 | `Leaderboard` | component | `src/components/Leaderboard.tsx` | L28 |
 | `login` | function | `src/lib/auth.ts` | L49 |
@@ -850,17 +949,28 @@ Alphabetical cross-reference of every symbol with its file location.
 | `logout` | function | `src/lib/auth.ts` | L60 |
 | `LogPage` | component | `src/app/log/page.tsx` | L16 |
 | `metadata` | const | `src/app/layout.tsx` | L18 |
-| `Navbar` | component | `src/components/Navbar.tsx` | L28 |
+| `middleware` | function | `src/middleware.ts` | L5 |
+| `Navbar` | component | `src/components/Navbar.tsx` | L31 |
+| `navItems` | const | `src/components/Navbar.tsx` | L19 |
 | `nextConfig` | const | `next.config.ts` | L3 |
+| `pauseTimer` | function | `src/lib/db.ts` | L469 |
 | `PendingLog` | interface | `src/lib/offlineQueue.ts` | L17 |
+| `PHASE_COLORS` | const | `src/components/FocusTimer.tsx` | L86 |
+| `Phase` | type | `src/components/FocusTimer.tsx` | L61 |
+| `POST` | function | `src/app/api/auth/token/route.ts` | L5 |
+| `PrivacyToggle` | component | `src/app/settings/page.tsx` | L18 |
+| `ProgramPage` | component | `src/app/program/page.tsx` | L560 |
+| `QuickAddTaskDialog` | component | `src/components/TopicTree.tsx` | L448 |
 | `queueOfflineLog` | function | `src/lib/offlineQueue.ts` | L31 |
 | `register` | function | `src/lib/auth.ts` | L13 |
 | `RegisterPage` | component | `src/app/auth/register/page.tsx` | L14 |
-| `removeFriend` | function | `src/lib/db.ts` | L154 |
+| `removeFriend` | function | `src/lib/db.ts` | L167 |
 | `requestNotificationPermission` | function | `src/lib/notifications.ts` | L4 |
+| `resetTimer` | function | `src/lib/db.ts` | L480 |
 | `RevisionSuggestions` | component | `src/components/RevisionSuggestions.tsx` | L18 |
-| `RootLayout` | component | `src/app/layout.tsx` | L33 |
+| `RootLayout` | component | `src/app/layout.tsx` | L41 |
 | `saveFCMToken` | function | `src/lib/notifications.ts` | L23 |
+| `ScheduleItem` | interface | `src/lib/db.ts` | L365 |
 | `Select` | component | `src/components/ui/select.tsx` | L9 |
 | `SelectContent` | component | `src/components/ui/select.tsx` | L60 |
 | `SelectGroup` | component | `src/components/ui/select.tsx` | L15 |
@@ -871,21 +981,29 @@ Alphabetical cross-reference of every symbol with its file location.
 | `SelectSeparator` | component | `src/components/ui/select.tsx` | L130 |
 | `SelectTrigger` | component | `src/components/ui/select.tsx` | L34 |
 | `SelectValue` | component | `src/components/ui/select.tsx` | L28 |
-| `sendFriendRequest` | function | `src/lib/db.ts` | L139 |
+| `sendFriendRequest` | function | `src/lib/db.ts` | L152 |
 | `sendLocalNotification` | function | `src/lib/notifications.ts` | L11 |
-| `setGoal` | function | `src/lib/db.ts` | L256 |
+| `setGoal` | function | `src/lib/db.ts` | L320 |
+| `setTopicCompleted` | function | `src/lib/db.ts` | L349 |
 | `SettingsPage` | component | `src/app/settings/page.tsx` | L40 |
 | `SetupUsernamePage` | component | `src/app/auth/setup-username/page.tsx` | L15 |
-| `StatsPage` | component | `src/app/stats/page.tsx` | L12 |
+| `startTimer` | function | `src/lib/db.ts` | L452 |
+| `StatCard` | component | `src/app/page.tsx` | L28 |
+| `StatsPage` | component | `src/app/stats/page.tsx` | L19 |
 | `StreakBadge` | component | `src/components/StreakBadge.tsx` | L12 |
-| `StudyGoal` | interface | `src/lib/db.ts` | L33 |
-| `StudyLog` | interface | `src/lib/db.ts` | L20 |
+| `stripUndefined` | function | `src/lib/db.ts` | L22 |
+| `StudyGoal` | interface | `src/lib/db.ts` | L41 |
+| `StudyLog` | interface | `src/lib/db.ts` | L28 |
 | `StudyLogForm` | component | `src/components/StudyLogForm.tsx` | L28 |
 | `Subject` | interface | `src/lib/subjects.ts` | L1 |
+| `SubjectCard` | component | `src/components/TopicTree.tsx` | L81 |
 | `SubjectChart` | component | `src/components/SubjectChart.tsx` | L68 |
+| `SubjectPanel` | component | `src/components/TopicTree.tsx` | L155 |
 | `SUBJECT_COLORS` | const | `src/lib/subjects.ts` | L325 |
 | `SUBJECT_MAP` | const | `src/lib/subjects.ts` | L324 |
 | `SUBJECTS` | const | `src/lib/subjects.ts` | L9 |
+| `subscribeTimerSession` | function | `src/lib/db.ts` | L440 |
+| `SummaryBanner` | component | `src/components/TopicTree.tsx` | L404 |
 | `Switch` | component | `src/components/ui/switch.tsx` | L8 |
 | `syncOfflineLogs` | function | `src/lib/offlineQueue.ts` | L41 |
 | `Tabs` | component | `src/components/ui/tabs.tsx` | L9 |
@@ -894,38 +1012,22 @@ Alphabetical cross-reference of every symbol with its file location.
 | `TabsTrigger` | component | `src/components/ui/tabs.tsx` | L58 |
 | `tabsListVariants` | const | `src/components/ui/tabs.tsx` | L27 |
 | `Textarea` | component | `src/components/ui/textarea.tsx` | L5 |
+| `TimerPage` | component | `src/app/timer/page.tsx` | L6 |
+| `TimerSession` | interface | `src/lib/db.ts` | L428 |
 | `Toaster` | component | `src/components/ui/sonner.tsx` | L7 |
 | `TopicBreakdownChart` | component | `src/components/TopicBreakdownChart.tsx` | L19 |
-| `updateStudyLog` | function | `src/lib/db.ts` | L74 |
-| `updateUserProfile` | function | `src/lib/db.ts` | L118 |
+| `TopicProgress` | interface | `src/lib/db.ts` | L334 |
+| `TopicTree` | component | `src/components/TopicTree.tsx` | L553 |
+| `TopicsPage` | component | `src/app/topics/page.tsx` | L7 |
+| `updateStudyLog` | function | `src/lib/db.ts` | L87 |
+| `updateUserProfile` | function | `src/lib/db.ts` | L131 |
 | `useAuth` | hook | `src/hooks/useAuth.ts` | L15 |
 | `useFriends` | hook | `src/hooks/useFriends.ts` | L40 |
 | `useGoals` | hook | `src/hooks/useGoals.ts` | L14 |
+| `useSchedule` | hook | `src/hooks/useSchedule.ts` | L12 |
 | `useStudyLogs` | hook | `src/hooks/useStudyLogs.ts` | L18 |
-| `UserProfile` | interface | `src/lib/db.ts` | L41 |
-| `viewport` | const | `src/app/layout.tsx` | L29 |
+| `useTopicProgress` | hook | `src/hooks/useTopicProgress.ts` | L8 |
+| `UserProfile` | interface | `src/lib/db.ts` | L49 |
+| `viewport` | const | `src/app/layout.tsx` | L37 |
 | `WeeklyBarChart` | component | `src/components/WeeklyBarChart.tsx` | L63 |
 | `WeeklyCalendar` | component | `src/components/WeeklyCalendar.tsx` | L39 |
-| `adminAuth` | const | `src/lib/firebase-admin.ts` | L25 |
-| `adminDb` | const | `src/lib/firebase-admin.ts` | L24 |
-| `adminMessaging` | const | `src/lib/firebase-admin.ts` | L26 |
-| `BRANCH_TIMINGS` | const | `src/components/FocusTimer.tsx` | L32 |
-| `BRANCH_TO_SUBJECT` | const | `src/components/FocusTimer.tsx` | L48 |
-| `BranchTiming` | interface | `src/components/FocusTimer.tsx` | L29 |
-| `calcLongest` | function | `src/components/StreakBadge.tsx` | L58 |
-| `calculateSM2Intervals` | function | `src/lib/db.ts` | L246 |
-| `DANGER_THRESHOLD_RATIO` | const | `src/components/FocusTimer.tsx` | L57 |
-| `ExamTrendChart` | component | `src/components/ExamTrendChart.tsx` | L15 |
-| `ExamTrendChartProps` | interface | `src/components/ExamTrendChart.tsx` | L11 |
-| `FocusTimer` | component | `src/components/FocusTimer.tsx` | L121 |
-| `formatTime` | function | `src/components/FocusTimer.tsx` | L87 |
-| `getDangerSeconds` | function | `src/components/FocusTimer.tsx` | L60 |
-| `getPhase` | function | `src/components/FocusTimer.tsx` | L64 |
-| `getPhaseProgress` | function | `src/components/FocusTimer.tsx` | L70 |
-| `GlowOrb` | component | `src/components/FocusTimer.tsx` | L93 |
-| `isFirebaseAdminConfigured` | const | `src/lib/firebase-admin.ts` | L6 |
-| `middleware` | function | `src/middleware.ts` | L5 |
-| `PHASE_COLORS` | const | `src/components/FocusTimer.tsx` | L82 |
-| `Phase` | type | `src/components/FocusTimer.tsx` | L54 |
-| `stripUndefined` | function | `src/lib/db.ts` | L17 |
-| `TimerPage` | component | `src/app/timer/page.tsx` | L6 |
