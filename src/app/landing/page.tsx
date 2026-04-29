@@ -16,6 +16,7 @@ import {
   Smartphone,
   ArrowRight,
   Star,
+  Monitor,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase";
@@ -65,6 +66,9 @@ export default function LandingPage() {
             </span>
           </Link>
           <div className="flex items-center gap-3">
+            <Link href="/download" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">
+              İndir
+            </Link>
             <Link href="/auth/login">
               <Button variant="ghost" className="text-sm hover:bg-white/5">
                 Giriş Yap
@@ -189,6 +193,13 @@ export default function LandingPage() {
                 desc: "3+ gündür çalışmadığınız konuları otomatik hatırlatan akıllı sistem.",
                 color: "#ef4444",
               },
+              {
+                icon: Monitor,
+                title: "Masaüstü Uygulaması",
+                desc: "Windows dinamik ada widget'ı ile zamanlayıcıyı ve branş denemelerini tarayıcıya geçmeden yönetin.",
+                color: "#8b5cf6",
+                href: "/download",
+              },
             ].map((feature) => (
               <div
                 key={feature.title}
@@ -202,6 +213,15 @@ export default function LandingPage() {
                 </div>
                 <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{feature.desc}</p>
+                {"href" in feature && feature.href && (
+                  <Link
+                    href={feature.href}
+                    className="inline-flex items-center gap-1 mt-3 text-xs font-medium text-primary hover:underline"
+                  >
+                    İndir
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                )}
               </div>
             ))}
           </div>
