@@ -10,6 +10,8 @@ export const metadata = {
 export default function DownloadPage() {
   const RELEASE_URL =
     "https://github.com/SsMmGg28/Studylogger/releases/latest";
+  const DIRECT_DOWNLOAD_URL =
+    "https://github.com/SsMmGg28/Studylogger/releases/download/v1.0.0/Dynamic%20Island%20Setup%201.0.0.exe";
 
   const features = [
     "Windows görev çubuğunuzda dinamik ada widget'ı",
@@ -55,7 +57,7 @@ export default function DownloadPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
-            <a href={RELEASE_URL} target="_blank" rel="noopener noreferrer">
+            <a href={DIRECT_DOWNLOAD_URL} download>
               <Button
                 size="lg"
                 className="text-base px-8 py-6 shadow-xl shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-1 transition-all gap-2.5 group"
