@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
   const clientSession = request.cookies.get("client-session")?.value === "true";
   const { pathname } = request.nextUrl;
 
-  const publicPaths = ["/landing", "/auth/login", "/auth/register"];
+  const publicPaths = ["/landing", "/auth/login", "/auth/register", "/download"];
   const isPublicPath = publicPaths.includes(pathname);
 
   // Allow static files, API routes, and setup-username (which requires partial auth) to pass through
