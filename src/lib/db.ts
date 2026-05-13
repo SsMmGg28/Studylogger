@@ -95,20 +95,20 @@ export async function deleteStudyLog(id: string): Promise<void> {
   await deleteDoc(doc(db, "studyLogs", id));
 }
 
-export async function getUserStudyLogs(uid: string): Promise<StudyLog[]> {
+export async function getUserStudyLogs(uid: string, maxResults?: number): Promise<StudyLog[]> {
   // No orderBy in query — avoids composite index requirement on Firestore
-  const q = query(
-    collection(db, "studyLogs"),
-    where("uid", "==", uid)
-  );
+  const constraints = [where("uid", "==", uid)];
+  const q = query(collection(db, "studyLogs"), ...constraints);
   const snap = await getDocs(q);
   const logs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as StudyLog));
-  return logs.sort((a, b) => {
+  const sorted = logs.sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     const aTs = a.createdAt?.seconds ?? 0;
     const bTs = b.createdAt?.seconds ?? 0;
     return bTs - aTs;
   });
+  // Cap results to avoid loading entire history on dashboard; History page passes undefined for all
+  return maxResults !== undefined ? sorted.slice(0, maxResults) : sorted;
 }
 
 export async function getFriendStudyLogs(uid: string): Promise<StudyLog[]> {

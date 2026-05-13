@@ -18,7 +18,7 @@ import RevisionSuggestions from "@/components/RevisionSuggestions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/hooks/useAuth";
+import DashboardSkeleton from "@/components/DashboardSkeleton";
 import { useStudyLogs } from "@/hooks/useStudyLogs";
 import { useGoals } from "@/hooks/useGoals";
 import { aggregateBySubject, getUserExamLogs, type ExamLog } from "@/lib/db";
@@ -38,14 +38,14 @@ function StatCard({
 }) {
   return (
     <Card className="group hover:border-primary/20 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5">
-      <CardContent className="p-5 flex items-center gap-4">
-        <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 group-hover:from-primary/20 group-hover:to-primary/10 transition-colors">
-          <Icon className="w-5 h-5 text-primary" />
+      <CardContent className="p-3 sm:p-5 flex items-center gap-3 sm:gap-4">
+        <div className="shrink-0 p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 group-hover:from-primary/20 group-hover:to-primary/10 transition-colors">
+          <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
         </div>
-        <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
-          <p className="text-xl font-bold leading-tight tracking-tight mt-0.5">{value}</p>
-          {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+        <div className="min-w-0 overflow-hidden">
+          <p className="text-[10px] sm:text-[11px] uppercase tracking-wider text-muted-foreground font-medium truncate">{label}</p>
+          <p className="text-lg sm:text-xl font-bold leading-tight tracking-tight mt-0.5 truncate">{value}</p>
+          {sub && <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 truncate">{sub}</p>}
         </div>
       </CardContent>
     </Card>
@@ -54,7 +54,7 @@ function StatCard({
 
 export default function DashboardPage() {
   const { user, profile } = useAuth();
-  const { logs, loading } = useStudyLogs(user?.uid ?? null);
+  const { logs, loading } = useStudyLogs(user?.uid ?? null, 200);
   const { goals } = useGoals(user?.uid ?? null);
   const [examLogs, setExamLogs] = useState<ExamLog[]>([]);
 
@@ -64,6 +64,7 @@ export default function DashboardPage() {
   }, [user?.uid]);
 
   const now = new Date();
+  const todayStr = format(now, "yyyy-MM-dd");
   const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd");
   const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd");
   const monthStart = format(
@@ -71,55 +72,84 @@ export default function DashboardPage() {
     "yyyy-MM-dd"
   );
 
-  const weekLogs = useMemo(
-    () => logs.filter((l) => l.date >= weekStart && l.date <= weekEnd),
-    [logs, weekStart, weekEnd]
-  );
-  const monthLogs = useMemo(
-    () => logs.filter((l) => l.date >= monthStart),
-    [logs, monthStart]
-  );
-  const allBySubject = useMemo(() => aggregateBySubject(logs), [logs]);
-  const weekBySubject = useMemo(() => aggregateBySubject(weekLogs), [weekLogs]);
+  // Single memo for all derived study-log stats — avoids repeated filter passes
+  const stats = useMemo(() => {
+    const todayLogs = logs.filter((l) => l.date === todayStr);
+    const weekLogs = logs.filter((l) => l.date >= weekStart && l.date <= weekEnd);
+    const monthLogs = logs.filter((l) => l.date >= monthStart);
 
-  const weekMins = weekLogs.reduce((s, l) => s + l.durationMinutes, 0);
-  const weekQs = weekLogs.reduce((s, l) => s + l.questionCount, 0);
-  const monthMins = monthLogs.reduce((s, l) => s + l.durationMinutes, 0);
-  const totalMins = logs.reduce((s, l) => s + l.durationMinutes, 0);
-  const totalQs = logs.reduce((s, l) => s + l.questionCount, 0);
+    const allBySubject = aggregateBySubject(logs);
+    const weekBySubject = aggregateBySubject(weekLogs);
+    const monthBySubject = aggregateBySubject(monthLogs);
 
-  // Today stats
-  const todayStr = format(now, "yyyy-MM-dd");
-  const todayLogs = useMemo(
-    () => logs.filter((l) => l.date === todayStr),
-    [logs, todayStr]
-  );
-  const todayMins = todayLogs.reduce((s, l) => s + l.durationMinutes, 0);
-  const todayQs = todayLogs.reduce((s, l) => s + l.questionCount, 0);
+    return {
+      todayLogs,
+      weekLogs,
+      monthLogs,
+      allBySubject,
+      weekBySubject,
+      monthBySubject,
+      todayMins: todayLogs.reduce((s, l) => s + l.durationMinutes, 0),
+      todayQs: todayLogs.reduce((s, l) => s + l.questionCount, 0),
+      weekMins: weekLogs.reduce((s, l) => s + l.durationMinutes, 0),
+      weekQs: weekLogs.reduce((s, l) => s + l.questionCount, 0),
+      monthMins: monthLogs.reduce((s, l) => s + l.durationMinutes, 0),
+      totalMins: logs.reduce((s, l) => s + l.durationMinutes, 0),
+      totalQs: logs.reduce((s, l) => s + l.questionCount, 0),
+    };
+  }, [logs, todayStr, weekStart, weekEnd, monthStart]);
 
-  // Exam log contributions (branş denemesi süresi + net skoru)
+  const {
+    todayLogs,
+    weekLogs,
+    monthLogs,
+    allBySubject,
+    weekBySubject,
+    monthBySubject,
+    todayMins,
+    todayQs,
+    weekMins,
+    weekQs,
+    monthMins,
+    totalMins,
+    totalQs,
+  } = stats;
+
+  // Exam log derived stats
   function examNet(l: ExamLog) {
     return l.examCategory === "brans" ? Math.round(l.net ?? 0) : Math.round(l.totalNet ?? 0);
   }
-  const examWeekLogs = useMemo(
-    () => examLogs.filter((l) => l.date >= weekStart && l.date <= weekEnd),
-    [examLogs, weekStart, weekEnd]
-  );
-  const examMonthLogs = useMemo(
-    () => examLogs.filter((l) => l.date >= monthStart),
-    [examLogs, monthStart]
-  );
-  const examTodayLogs = useMemo(
-    () => examLogs.filter((l) => l.date === todayStr),
-    [examLogs, todayStr]
-  );
-  const examWeekMins = examWeekLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0);
-  const examMonthMins = examMonthLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0);
-  const examTotalMins = examLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0);
-  const examTodayMins = examTodayLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0);
-  const examWeekQs = examWeekLogs.reduce((s, l) => s + examNet(l), 0);
-  const examTotalQs = examLogs.reduce((s, l) => s + examNet(l), 0);
-  const examTodayQs = examTodayLogs.reduce((s, l) => s + examNet(l), 0);
+  const examStats = useMemo(() => {
+    const examWeekLogs = examLogs.filter((l) => l.date >= weekStart && l.date <= weekEnd);
+    const examMonthLogs = examLogs.filter((l) => l.date >= monthStart);
+    const examTodayLogs = examLogs.filter((l) => l.date === todayStr);
+    return {
+      examWeekLogs,
+      examMonthLogs,
+      examTodayLogs,
+      examWeekMins: examWeekLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0),
+      examMonthMins: examMonthLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0),
+      examTotalMins: examLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0),
+      examTodayMins: examTodayLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0),
+      examWeekQs: examWeekLogs.reduce((s, l) => s + examNet(l), 0),
+      examTotalQs: examLogs.reduce((s, l) => s + examNet(l), 0),
+      examTodayQs: examTodayLogs.reduce((s, l) => s + examNet(l), 0),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examLogs, weekStart, weekEnd, monthStart, todayStr]);
+
+  const {
+    examWeekLogs,
+    examMonthLogs,
+    examTodayLogs,
+    examWeekMins,
+    examMonthMins,
+    examTotalMins,
+    examTodayMins,
+    examWeekQs,
+    examTotalQs,
+    examTodayQs,
+  } = examStats;
 
   function fmtMins(m: number) {
     const h = Math.floor(m / 60);
@@ -128,7 +158,7 @@ export default function DashboardPage() {
   }
 
   function getGoalCurrent(goal: { subject: string; metric: "minutes" | "questions"; period: "weekly" | "monthly" }) {
-    const agg = goal.period === "weekly" ? weekBySubject : aggregateBySubject(monthLogs);
+    const agg = goal.period === "weekly" ? weekBySubject : monthBySubject;
     const data = agg[goal.subject];
     if (!data) return 0;
     return goal.metric === "minutes" ? data.minutes : data.questions;
@@ -158,7 +188,7 @@ export default function DashboardPage() {
     <AuthGuard>
       <div className="min-h-screen flex flex-col">
         <Navbar />
-        <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8 space-y-6">
+        <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 py-5 sm:py-8 space-y-5 sm:space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
@@ -185,9 +215,7 @@ export default function DashboardPage() {
           <ExamCountdown />
 
           {loading ? (
-            <div className="flex justify-center py-20">
-              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            </div>
+            <DashboardSkeleton />
           ) : (
             <>
               {/* Stats row */}

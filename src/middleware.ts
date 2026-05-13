@@ -9,12 +9,17 @@ export function middleware(request: NextRequest) {
   const publicPaths = ["/landing", "/auth/login", "/auth/register", "/download"];
   const isPublicPath = publicPaths.includes(pathname);
 
-  // Allow static files, API routes, and setup-username (which requires partial auth) to pass through
+  // Explicitly allow only known public API prefixes; everything else goes through auth checks.
+  // Using an explicit whitelist prevents accidentally bypassing auth on future new API routes.
+  const isPublicApiRoute =
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/cron") ||
+    pathname.startsWith("/api/desktop");
+
+  // Allow static files, whitelisted API routes, and setup-username (which requires partial auth)
   if (
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname.startsWith("/api/cron") ||
-    pathname.startsWith("/api/desktop") ||
+    isPublicApiRoute ||
     pathname === "/auth/setup-username" ||
     pathname.includes(".")
   ) {

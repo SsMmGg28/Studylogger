@@ -3,15 +3,23 @@ import { addStudyLog } from "./db";
 const DB_NAME = "studylogger-offline";
 const STORE_NAME = "pendingLogs";
 
+// Singleton promise — reuse the same connection across all calls
+let _dbPromise: Promise<IDBDatabase> | null = null;
+
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => {
       req.result.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => {
+      _dbPromise = null; // reset so next call retries
+      reject(req.error);
+    };
   });
+  return _dbPromise;
 }
 
 export interface PendingLog {

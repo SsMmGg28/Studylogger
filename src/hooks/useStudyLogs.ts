@@ -15,7 +15,8 @@ interface UseStudyLogsResult {
   remove: (id: string) => Promise<void>;
 }
 
-export function useStudyLogs(uid: string | null): UseStudyLogsResult {
+/** @param maxResults Cap returned logs (e.g. 200 for dashboard). Pass undefined for full history. */
+export function useStudyLogs(uid: string | null, maxResults?: number): UseStudyLogsResult {
   const [logs, setLogs] = useState<StudyLog[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -31,7 +32,7 @@ export function useStudyLogs(uid: string | null): UseStudyLogsResult {
       } catch (syncErr) {
         console.error("[StudyLogs] Offline sync failed:", syncErr);
       }
-      const data = await getUserStudyLogs(uid);
+      const data = await getUserStudyLogs(uid, maxResults);
       console.log(`[StudyLogs] Fetched ${data.length} logs for uid=${uid}`);
       setLogs(data);
     } catch (err) {
@@ -40,7 +41,7 @@ export function useStudyLogs(uid: string | null): UseStudyLogsResult {
     } finally {
       setLoading(false);
     }
-  }, [uid, isDemo]);
+  }, [uid, isDemo, maxResults]);
 
   useEffect(() => {
     if (!uid) {

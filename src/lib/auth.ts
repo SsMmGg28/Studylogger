@@ -109,7 +109,7 @@ export function loginDemo(): void {
   if (typeof window !== "undefined") {
     localStorage.setItem("demo-mode", "true");
     setClientSessionHint();
-    document.cookie = "demo-mode=true; path=/; max-age=31536000";
+    document.cookie = `demo-mode=true; path=/; max-age=86400`;
     window.location.href = "/";
   }
 }
